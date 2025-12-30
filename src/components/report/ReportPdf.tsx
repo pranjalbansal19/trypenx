@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 700,
     marginTop: 28,
-    marginBottom: 20,
+    marginBottom: 24,
     color: '#111827',
     borderBottomWidth: 2,
     borderBottomColor: '#e5e7eb',
@@ -695,6 +695,7 @@ const styles = StyleSheet.create({
     borderBottomStyle: 'solid',
     minHeight: 40,
     backgroundColor: '#ffffff',
+    alignItems: 'flex-start',
   },
   tableHeaderRow: {
     flexDirection: 'row',
@@ -703,6 +704,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#9ca3af',
     borderBottomStyle: 'solid',
     minHeight: 44,
+    alignItems: 'flex-start',
   },
   tableCell: {
     flex: 1,
@@ -713,15 +715,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#111827',
-    lineHeight: 1.6,
+    lineHeight: 1.7,
     borderRightWidth: 1,
     borderRightColor: '#9ca3af',
     borderRightStyle: 'solid',
     textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     backgroundColor: '#ffffff',
+    minWidth: 0,
   },
   tableHeaderCell: {
     flex: 1,
@@ -739,7 +742,8 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    minWidth: 0,
   },
   // Code block styles - Beautiful terminal-like appearance
   codeBlock: {
@@ -1498,7 +1502,7 @@ export function ReportPdf({
             return (
               <View key={s.key} wrap={false}>
                 {/* Section title */}
-                <Text style={styles.sectionTitle} wrap break={false}>
+                <Text style={styles.sectionTitle} wrap>
                   {s.title}
                 </Text>
                 <View wrap={false}>
@@ -1688,7 +1692,6 @@ export function ReportPdf({
                                         <Text
                                           style={styles.roadmapCardText}
                                           wrap
-                                          break={false}
                                         >
                                           {item}
                                         </Text>
@@ -1729,7 +1732,6 @@ export function ReportPdf({
                                         <Text
                                           style={styles.roadmapCardText}
                                           wrap
-                                          break={false}
                                         >
                                           {item}
                                         </Text>
@@ -1761,7 +1763,6 @@ export function ReportPdf({
                                     key={idx}
                                     style={styles.priorityMatrixText}
                                     wrap
-                                    break={false}
                                   >
                                     • {text}
                                   </Text>
@@ -1783,11 +1784,7 @@ export function ReportPdf({
                                 <Text style={styles.roadmapSectionTitle}>
                                   {title} (Optional)
                                 </Text>
-                                <Text
-                                  style={styles.paragraph}
-                                  wrap
-                                  break={false}
-                                >
+                                <Text style={styles.paragraph} wrap>
                                   If desired, {data.domain} can implement a
                                   longer-term resilience programme:
                                 </Text>
@@ -1814,11 +1811,7 @@ export function ReportPdf({
                                       >
                                         •
                                       </Text>
-                                      <Text
-                                        style={styles.roadmapCardText}
-                                        wrap
-                                        break={false}
-                                      >
+                                      <Text style={styles.roadmapCardText} wrap>
                                         {text}
                                       </Text>
                                     </View>
@@ -1941,10 +1934,9 @@ export function ReportPdf({
                                             color: isHeader
                                               ? '#ffffff'
                                               : severityColor || '#111827',
-                                            lineHeight: 1.6,
+                                            lineHeight: 1.7,
                                           }}
                                           wrap
-                                          break={false}
                                         >
                                           {cleanCell}
                                         </Text>
@@ -1971,11 +1963,7 @@ export function ReportPdf({
                                 key={`${item.key}-line-${idx}`}
                                 style={styles.codeLine}
                               >
-                                <Text
-                                  style={styles.codeText}
-                                  wrap
-                                  break={false}
-                                >
+                                <Text style={styles.codeText} wrap>
                                   {codeLine || ' '}
                                 </Text>
                               </View>
@@ -2025,7 +2013,6 @@ export function ReportPdf({
                                   <Text
                                     style={styles.riskCalculationTitle}
                                     wrap
-                                    break={false}
                                   >
                                     Risk Rating Calculation:
                                   </Text>
@@ -2139,10 +2126,9 @@ export function ReportPdf({
                                                       ? '#ffffff'
                                                       : severityColor ||
                                                         '#111827',
-                                                    lineHeight: 1.6,
+                                                    lineHeight: 1.7,
                                                   }}
                                                   wrap
-                                                  break={false}
                                                 >
                                                   {cleanCell}
                                                 </Text>
@@ -2237,7 +2223,7 @@ export function ReportPdf({
                                   color: (pillStyle || styles.sevMedium).color,
                                   lineHeight: 1,
                                 }}
-                                wrap={false}
+                                wrap
                               >
                                 {label}: {valueDisplay}
                               </Text>
@@ -2262,10 +2248,13 @@ export function ReportPdf({
                         return (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 2 }}
+                            style={{
+                              marginBottom: 2,
+                              marginTop: processed.level <= 3 ? 8 : 4,
+                            }}
                             wrap={false}
                           >
-                            <Text style={headingStyle} wrap break={false}>
+                            <Text style={headingStyle} wrap>
                               {processed.text}
                             </Text>
                           </View>
@@ -2275,13 +2264,12 @@ export function ReportPdf({
                         return processed.isBold ? (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 4 }}
+                            style={{ marginBottom: 6 }}
                             wrap={false}
                           >
                             <Text
                               style={[styles.bulletPoint, styles.boldText]}
                               wrap
-                              break={false}
                             >
                               • {processed.text}
                             </Text>
@@ -2289,10 +2277,10 @@ export function ReportPdf({
                         ) : (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 4 }}
+                            style={{ marginBottom: 6 }}
                             wrap={false}
                           >
-                            <Text style={styles.bulletPoint} wrap break={false}>
+                            <Text style={styles.bulletPoint} wrap>
                               • {processed.text}
                             </Text>
                           </View>
@@ -2314,10 +2302,10 @@ export function ReportPdf({
                           return (
                             <View
                               key={item.key}
-                              style={{ marginBottom: 8 }}
+                              style={{ marginBottom: 10 }}
                               wrap={false}
                             >
-                              <Text style={styles.paragraph} wrap break={false}>
+                              <Text style={styles.paragraph} wrap>
                                 <Text
                                   style={{
                                     fontFamily: 'Helvetica',
@@ -2349,10 +2337,10 @@ export function ReportPdf({
                       return (
                         <View
                           key={item.key}
-                          style={{ marginBottom: 6 }}
+                          style={{ marginBottom: 8 }}
                           wrap={false}
                         >
-                          <Text style={styles.paragraph} wrap break={false}>
+                          <Text style={styles.paragraph} wrap>
                             {processed.text}
                           </Text>
                         </View>
