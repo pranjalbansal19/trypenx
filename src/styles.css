@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App base styles */
+:root {
+	--bg: 12 8 24; /* slate-950 */
+}
+
+body {
+	@apply bg-slate-950 text-slate-100 antialiased;
+}
+
+.glass {
+	@apply bg-white/5 backdrop-blur-md border border-white/10 shadow-soft;
+}
+
+.container-max {
+	@apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+.btn {
+	@apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition-colors;
+}
+
+.btn-primary {
+	@apply bg-brand text-slate-950 hover:bg-brand-dark;
+}
+
+.btn-outline {
+	@apply border border-white/20 hover:border-white/40;
+}
+
+.badge {
+	@apply inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/90;
+}
+
+
