@@ -82,27 +82,29 @@ export function Navbar() {
             </nav>
           )}
           <div className="flex items-center gap-3">
-            {isAuthenticated ? (
+            {/* Hidden for now - will be enabled in future */}
+            {false && (
               <>
-                {/* Hidden for now - will be enabled in future */}
-                {false && needsUpgrade && (
-                  <button
-                    onClick={() => setShowCheckout(true)}
-                    className="btn btn-primary"
-                  >
-                    <Sparkles size={16} /> Upgrade
-                  </button>
-                )}
-                {false && (
-                  <button onClick={handleLogout} className="btn btn-outline">
-                    <LogOut size={16} /> Logout
-                  </button>
+                {isAuthenticated ? (
+                  <>
+                    {needsUpgrade && (
+                      <button
+                        onClick={() => setShowCheckout(true)}
+                        className="btn btn-primary"
+                      >
+                        <Sparkles size={16} /> Upgrade
+                      </button>
+                    )}
+                    <button onClick={handleLogout} className="btn btn-outline">
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </>
+                ) : (
+                  <Link to="/login" className="btn btn-primary">
+                    <LogIn size={16} /> Login
+                  </Link>
                 )}
               </>
-            ) : (
-              <Link to="/login" className="btn btn-primary">
-                <LogIn size={16} /> Login
-              </Link>
             )}
           </div>
         </div>
