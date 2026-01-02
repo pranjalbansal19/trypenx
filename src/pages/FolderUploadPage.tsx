@@ -527,6 +527,122 @@ export function FolderUploadPage() {
     return sections
   }
 
+  // Extract severity counts from AI-generated report content
+  function extractSeverityFromContent(
+    content: string
+  ): { critical: number; high: number; medium: number; low: number } {
+    const severitySummary = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    }
+
+    const contentLower = content.toLowerCase()
+
+    // Look for severity distribution tables or counts
+    // Pattern 1: Table format with severity counts
+    const tablePattern = /\|.*severity.*\|.*count.*\|/gi
+    const tableMatches = content.match(tablePattern)
+    if (tableMatches) {
+      // Extract rows from table
+      const lines = content.split('\n')
+      for (const line of lines) {
+        if (line.includes('|') && line.toLowerCase().includes('severity')) {
+          continue // Skip header
+        }
+        const lowerLine = line.toLowerCase()
+        if (lowerLine.includes('critical')) {
+          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
+          if (countMatch && countMatch[1]) {
+            severitySummary.critical = parseInt(countMatch[1], 10)
+          }
+        } else if (lowerLine.includes('high') && !lowerLine.includes('medium')) {
+          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
+          if (countMatch && countMatch[1]) {
+            severitySummary.high = parseInt(countMatch[1], 10)
+          }
+        } else if (lowerLine.includes('medium')) {
+          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
+          if (countMatch && countMatch[1]) {
+            severitySummary.medium = parseInt(countMatch[1], 10)
+          }
+        } else if (lowerLine.includes('low')) {
+          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
+          if (countMatch && countMatch[1]) {
+            severitySummary.low = parseInt(countMatch[1], 10)
+          }
+        }
+      }
+    }
+
+    // Pattern 2: Text patterns like "Critical severity findings: X"
+    const criticalMatch = content.match(
+      /critical\s+severity\s+findings?[:\s]+(\d+)/gi
+    )
+    if (criticalMatch) {
+      const countMatch = criticalMatch[0].match(/(\d+)/)
+      if (countMatch && countMatch[1]) {
+        severitySummary.critical = parseInt(countMatch[1], 10)
+      }
+    }
+
+    const highMatch = content.match(/high\s+severity\s+findings?[:\s]+(\d+)/gi)
+    if (highMatch) {
+      const countMatch = highMatch[0].match(/(\d+)/)
+      if (countMatch && countMatch[1]) {
+        severitySummary.high = parseInt(countMatch[1], 10)
+      }
+    }
+
+    const mediumMatch = content.match(
+      /medium\s+severity\s+findings?[:\s]+(\d+)/gi
+    )
+    if (mediumMatch) {
+      const countMatch = mediumMatch[0].match(/(\d+)/)
+      if (countMatch && countMatch[1]) {
+        severitySummary.medium = parseInt(countMatch[1], 10)
+      }
+    }
+
+    const lowMatch = content.match(/low\s+severity\s+findings?[:\s]+(\d+)/gi)
+    if (lowMatch) {
+      const countMatch = lowMatch[0].match(/(\d+)/)
+      if (countMatch && countMatch[1]) {
+        severitySummary.low = parseInt(countMatch[1], 10)
+      }
+    }
+
+    // Pattern 3: Count occurrences of "**Severity:** Critical/High/Medium/Low" in findings
+    if (
+      severitySummary.critical === 0 &&
+      severitySummary.high === 0 &&
+      severitySummary.medium === 0 &&
+      severitySummary.low === 0
+    ) {
+      // Fallback: count severity mentions in findings
+      const criticalCount = (
+        content.match(/\*\*severity:\*\*\s*critical/gi) || []
+      ).length
+      const highCount = (
+        content.match(/\*\*severity:\*\*\s*high/gi) || []
+      ).length
+      const mediumCount = (
+        content.match(/\*\*severity:\*\*\s*medium/gi) || []
+      ).length
+      const lowCount = (
+        content.match(/\*\*severity:\*\*\s*low/gi) || []
+      ).length
+
+      severitySummary.critical = criticalCount
+      severitySummary.high = highCount
+      severitySummary.medium = mediumCount
+      severitySummary.low = lowCount
+    }
+
+    return severitySummary
+  }
+
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return
 
@@ -648,10 +764,14 @@ export function FolderUploadPage() {
           )
         })
 
+        // Extract severity counts from report content
+        const severitySummary = extractSeverityFromContent(aiResult.summary)
+        console.log('Extracted severity counts:', severitySummary)
+
         const report: PreparedReportData = {
           domain: folderData.folderName,
           sections: sections,
-          severitySummary: { critical: 0, high: 0, medium: 0, low: 0 },
+          severitySummary: severitySummary,
         }
         setReportData(report)
         console.log('✓ Report data prepared and ready for PDF generation')

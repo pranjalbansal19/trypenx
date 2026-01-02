@@ -12,6 +12,9 @@ import {
   Polyline,
   Line,
   Image,
+  Rect,
+  Circle,
+  Path,
 } from '@react-pdf/renderer'
 import type { PreparedReportData } from '../../services/reports'
 import cybersentryLogo from '../../assets/cybersentry.png'
@@ -23,6 +26,107 @@ interface Props {
   brandColor: string
   data: PreparedReportData
   logo?: 'cybersentry' | 'onecom' | 'cybersentry-x-hosted'
+}
+
+// Helper function to get emoji for a heading based on keywords
+function getHeadingEmoji(text: string): string {
+  const lowerText = text.toLowerCase()
+
+  // Risk and Security related
+  if (lowerText.includes('risk trend') || lowerText.includes('trend analysis'))
+    return '📊'
+  if (lowerText.includes('risk') && lowerText.includes('assessment'))
+    return '🔍'
+  if (lowerText.includes('risk') && lowerText.includes('rating')) return '⚠️'
+  if (lowerText.includes('risk')) return '⚠️'
+  if (
+    lowerText.includes('vulnerability') ||
+    lowerText.includes('vulnerabilities')
+  )
+    return '🔓'
+  if (lowerText.includes('security') && lowerText.includes('posture'))
+    return '🛡️'
+  if (lowerText.includes('security')) return '🔐'
+  if (lowerText.includes('threat')) return '🎯'
+  if (lowerText.includes('attack')) return '⚔️'
+
+  // Findings and Analysis
+  if (lowerText.includes('finding') || lowerText.includes('findings'))
+    return '🔎'
+  if (lowerText.includes('summary') || lowerText.includes('executive'))
+    return '📋'
+  if (lowerText.includes('overview')) return '👁️'
+  if (lowerText.includes('analysis')) return '📈'
+  if (lowerText.includes('assessment')) return '📝'
+
+  // Remediation and Recommendations
+  if (lowerText.includes('remediation') || lowerText.includes('recommendation'))
+    return '🔧'
+  if (lowerText.includes('solution')) return '💡'
+  if (lowerText.includes('mitigation')) return '🛠️'
+  if (lowerText.includes('fix') || lowerText.includes('fixes')) return '✅'
+
+  // Implementation and Roadmap
+  if (lowerText.includes('roadmap') || lowerText.includes('implementation'))
+    return '🗺️'
+  if (lowerText.includes('priority') && lowerText.includes('matrix'))
+    return '📊'
+  if (lowerText.includes('timeline')) return '⏱️'
+  if (lowerText.includes('schedule')) return '📅'
+
+  // Methodology and Scope
+  if (lowerText.includes('methodology') || lowerText.includes('scope'))
+    return '📐'
+  if (lowerText.includes('testing') || lowerText.includes('test')) return '🧪'
+  if (lowerText.includes('approach')) return '🎯'
+
+  // Technical Details
+  if (lowerText.includes('technical') || lowerText.includes('details'))
+    return '⚙️'
+  if (lowerText.includes('evidence') || lowerText.includes('proof')) return '📸'
+  if (lowerText.includes('code') || lowerText.includes('script')) return '💻'
+  if (lowerText.includes('configuration')) return '⚙️'
+
+  // Compliance and Standards
+  if (lowerText.includes('compliance')) return '✅'
+  if (lowerText.includes('standard') || lowerText.includes('framework'))
+    return '📚'
+  if (lowerText.includes('regulation')) return '📜'
+
+  // Impact and Business
+  if (lowerText.includes('impact') || lowerText.includes('business'))
+    return '💼'
+  if (lowerText.includes('severity')) return '🔴'
+  if (lowerText.includes('priority')) return '⭐'
+
+  // Success and Metrics
+  if (lowerText.includes('success') || lowerText.includes('metric')) return '📊'
+  if (lowerText.includes('goal') || lowerText.includes('target')) return '🎯'
+
+  // References and Glossary
+  if (lowerText.includes('reference') || lowerText.includes('cve')) return '📖'
+  if (lowerText.includes('glossary')) return '📚'
+  if (lowerText.includes('appendix')) return '📎'
+
+  // Table of Contents
+  if (lowerText.includes('table of contents') || lowerText.includes('contents'))
+    return '📑'
+
+  // Confidentiality
+  if (
+    lowerText.includes('confidentiality') ||
+    lowerText.includes('confidential')
+  )
+    return '🔒'
+
+  // Default emojis for numbered sections
+  if (lowerText.match(/^\d+\./)) {
+    const num = parseInt(lowerText.match(/^(\d+)/)?.[1] || '0')
+    const emojis = ['📋', '🔍', '📊', '⚠️', '🔧', '📈', '📚', '📎']
+    return emojis[num % emojis.length] || '📄'
+  }
+
+  return '📄' // Default emoji
 }
 
 // Helper function to check if a line is a table row
@@ -687,15 +791,19 @@ const styles = StyleSheet.create({
     borderStyle: 'solid',
     width: '100%',
     overflow: 'hidden',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#9ca3af',
     borderBottomStyle: 'solid',
-    minHeight: 40,
     backgroundColor: '#ffffff',
     alignItems: 'flex-start',
+    width: '100%',
   },
   tableHeaderRow: {
     flexDirection: 'row',
@@ -703,35 +811,34 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#9ca3af',
     borderBottomStyle: 'solid',
-    minHeight: 44,
     alignItems: 'flex-start',
+    width: '100%',
   },
   tableCell: {
     flex: 1,
-    padding: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 11,
+    padding: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 10,
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#111827',
-    lineHeight: 1.7,
+    lineHeight: 1.6,
     borderRightWidth: 1,
     borderRightColor: '#9ca3af',
     borderRightStyle: 'solid',
     textAlign: 'left',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
     backgroundColor: '#ffffff',
-    minWidth: 0,
+    minWidth: 120,
+    flexShrink: 1,
+    flexGrow: 1,
   },
   tableHeaderCell: {
     flex: 1,
-    padding: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 11,
+    padding: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 10,
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: '#ffffff',
@@ -740,10 +847,9 @@ const styles = StyleSheet.create({
     borderRightColor: '#6b7280',
     borderRightStyle: 'solid',
     textAlign: 'left',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    minWidth: 0,
+    minWidth: 120,
+    flexShrink: 1,
+    flexGrow: 1,
   },
   // Code block styles - Beautiful terminal-like appearance
   codeBlock: {
@@ -994,7 +1100,333 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginLeft: 20,
   },
+  // Graph container styles
+  graphContainer: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderStyle: 'solid',
+    borderRadius: 8,
+    padding: 20,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  graphTitle: {
+    fontSize: 14,
+    fontFamily: 'Helvetica',
+    fontWeight: 700,
+    color: '#111827',
+    marginBottom: 16,
+  },
+  graphLabel: {
+    fontSize: 10,
+    fontFamily: 'Helvetica',
+    fontWeight: 400,
+    color: '#6b7280',
+  },
+  graphBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 200,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingBottom: 20,
+  },
+  graphBar: {
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  graphBarFill: {
+    width: '100%',
+    backgroundColor: '#dc2626',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  graphBarLabel: {
+    fontSize: 9,
+    fontFamily: 'Helvetica',
+    fontWeight: 600,
+    color: '#111827',
+    textAlign: 'center',
+  },
+  graphBarValue: {
+    fontSize: 10,
+    fontFamily: 'Helvetica',
+    fontWeight: 700,
+    color: '#111827',
+    textAlign: 'center',
+    marginTop: 4,
+  },
 })
+
+// Severity Trend Graph Component
+function SeverityTrendGraph({
+  severitySummary,
+}: {
+  severitySummary: {
+    critical: number
+    high: number
+    medium: number
+    low: number
+  }
+}) {
+  // Use actual data from report
+  const rawData = [
+    {
+      label: 'Critical',
+      value: severitySummary.critical || 0,
+      color: '#dc2626',
+    },
+    {
+      label: 'High',
+      value: severitySummary.high || 0,
+      color: '#ea580c',
+    },
+    {
+      label: 'Medium',
+      value: severitySummary.medium || 0,
+      color: '#f59e0b',
+    },
+    {
+      label: 'Low',
+      value: severitySummary.low || 0,
+      color: '#16a34a',
+    },
+  ]
+
+  const totalVulnerabilities = rawData.reduce(
+    (sum, item) => sum + item.value,
+    0
+  )
+
+  // Calculate percentages and heights dynamically
+  const severityData = rawData.map((item) => {
+    const percentage =
+      totalVulnerabilities > 0 ? (item.value / totalVulnerabilities) * 100 : 0
+    // Height is based on percentage (0-100% maps to 0-100% of chart height)
+    const height = percentage
+    return {
+      ...item,
+      percentage: Math.round(percentage * 10) / 10, // Round to 1 decimal
+      height: Math.max(height, 5), // Minimum 5% height for visibility
+    }
+  })
+
+  const chartHeight = 180
+  const chartWidth = 500
+
+  return (
+    <View style={styles.graphContainer} wrap={false}>
+      <Text style={styles.graphTitle}>Severity Distribution Overview</Text>
+
+      {/* Chart Container - grid behind bars using fixed layout */}
+      <View style={{ marginBottom: 12 }} wrap={false}>
+        {/* Y-axis labels and chart row */}
+        <View style={{ flexDirection: 'row', marginBottom: 8 }} wrap={false}>
+          {/* Y-axis labels on left */}
+          <View
+            style={{ width: 50, alignItems: 'flex-end', paddingRight: 8 }}
+            wrap={false}
+          >
+            {[100, 75, 50, 25, 0].map((percent, i) => (
+              <Text
+                key={i}
+                style={{
+                  fontSize: 9,
+                  fontFamily: 'Helvetica',
+                  color: '#6b7280',
+                  height: 36,
+                  textAlign: 'right',
+                }}
+                wrap={false}
+              >
+                {percent}%
+              </Text>
+            ))}
+          </View>
+
+          {/* Chart area with fixed width for proper SVG rendering */}
+          <View
+            style={{
+              flex: 1,
+              height: chartHeight,
+              minWidth: 400,
+            }}
+            wrap={false}
+          >
+            {/* Grid lines and axes - rendered first (behind) using fixed coordinates */}
+            <Svg width={400} height={chartHeight}>
+              {/* Grid lines */}
+              {[0, 25, 50, 75, 100].map((percent, i) => {
+                const y = ((100 - percent) / 100) * chartHeight
+                return (
+                  <Line
+                    key={`grid-${i}`}
+                    x1="0"
+                    y1={y}
+                    x2="400"
+                    y2={y}
+                    stroke="#e5e7eb"
+                    strokeWidth="0.5"
+                  />
+                )
+              })}
+              {/* Y-axis line */}
+              <Line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2={chartHeight}
+                stroke="#9ca3af"
+                strokeWidth="1"
+              />
+              {/* X-axis line */}
+              <Line
+                x1="0"
+                y1={chartHeight}
+                x2="400"
+                y2={chartHeight}
+                stroke="#9ca3af"
+                strokeWidth="1"
+              />
+            </Svg>
+
+            {/* Bars - rendered on top using negative margin to overlay */}
+            <View
+              style={{
+                flexDirection: 'row',
+                height: chartHeight,
+                alignItems: 'flex-end',
+                marginTop: -chartHeight,
+                paddingLeft: 2,
+                paddingRight: 2,
+                paddingBottom: 2,
+              }}
+              wrap={false}
+            >
+              {severityData.map((item, index) => {
+                const barHeight = (item.height / 100) * chartHeight
+                return (
+                  <View
+                    key={index}
+                    style={{
+                      flex: 1,
+                      marginHorizontal: 4,
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                    }}
+                    wrap={false}
+                  >
+                    {/* Value on top */}
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontFamily: 'Helvetica',
+                        fontWeight: 700,
+                        color: item.color,
+                        marginBottom: 4,
+                      }}
+                      wrap={false}
+                    >
+                      {item.value}
+                    </Text>
+                    {/* Bar */}
+                    <View
+                      style={{
+                        width: '100%',
+                        height: barHeight,
+                        backgroundColor: item.color,
+                        borderRadius: 4,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        minHeight: 20,
+                      }}
+                      wrap={false}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontFamily: 'Helvetica',
+                          fontWeight: 700,
+                          color: '#ffffff',
+                        }}
+                        wrap={false}
+                      >
+                        {item.percentage.toFixed(1)}%
+                      </Text>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* X-axis labels */}
+        <View
+          style={{ flexDirection: 'row', marginLeft: 50, marginTop: 8 }}
+          wrap={false}
+        >
+          {severityData.map((item, index) => (
+            <View
+              key={index}
+              style={{ flex: 1, marginHorizontal: 4, alignItems: 'center' }}
+              wrap={false}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontFamily: 'Helvetica',
+                  fontWeight: 600,
+                  color: '#111827',
+                  textAlign: 'center',
+                }}
+                wrap={false}
+              >
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Legend and Summary */}
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          marginTop: 8,
+          paddingTop: 12,
+          borderTopWidth: 1,
+          borderTopColor: '#e5e7eb',
+        }}
+        wrap={false}
+      >
+        <View style={{ flex: 1 }} wrap={false}>
+          <Text style={styles.graphLabel} wrap={false}>
+            Total Vulnerabilities:{' '}
+            <Text style={{ fontWeight: 700, color: '#111827' }}>
+              {totalVulnerabilities}
+            </Text>
+          </Text>
+        </View>
+        <View style={{ flex: 1 }} wrap={false}>
+          <Text style={styles.graphLabel} wrap={false}>
+            Assessment Date:{' '}
+            <Text style={{ fontWeight: 700, color: '#111827' }}>
+              {new Date().toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </Text>
+          </Text>
+        </View>
+      </View>
+    </View>
+  )
+}
 
 export function ReportPdf({
   brandName,
@@ -1499,12 +1931,33 @@ export function ReportPdf({
               titleLower.includes('priority matrix') ||
               titleLower.includes('6.4')
 
+            // Check if this is Risk Trend Analysis section - more flexible detection
+            const contentLower = String(s.content).toLowerCase()
+            const isRiskTrendSection =
+              titleLower.includes('risk trend') ||
+              titleLower.includes('trend analysis') ||
+              titleLower.includes('5.6') ||
+              (titleLower.includes('risk') && titleLower.includes('trend')) ||
+              contentLower.includes('risk trend analysis') ||
+              contentLower.includes('trend analysis indicates')
+
             return (
               <View key={s.key} wrap={false}>
                 {/* Section title */}
                 <Text style={styles.sectionTitle} wrap>
                   {s.title}
                 </Text>
+                {/* Render severity graph for Risk Trend Analysis section - right after title */}
+                {isRiskTrendSection && (
+                  <View
+                    style={{ marginTop: 12, marginBottom: 20 }}
+                    wrap={false}
+                  >
+                    <SeverityTrendGraph
+                      severitySummary={data.severitySummary}
+                    />
+                  </View>
+                )}
                 <View wrap={false}>
                   {/* Special rendering for Roadmap and Priority Matrix sections */}
                   {(isRoadmapSection || isPriorityMatrixSection) && (
@@ -1849,11 +2302,12 @@ export function ReportPdf({
                               return (
                                 <View
                                   key={`${item.key}-row-${rowIndex}`}
-                                  style={
+                                  style={[
                                     isHeader
                                       ? styles.tableHeaderRow
-                                      : styles.tableRow
-                                  }
+                                      : styles.tableRow,
+                                    { width: '100%' },
+                                  ]}
                                 >
                                   {row.map((cell, cellIndex) => {
                                     const isLastCell =
@@ -1918,14 +2372,50 @@ export function ReportPdf({
                                       }
                                     }
 
+                                    // Detect if this is a glossary table (Term/Definition columns)
+                                    const isGlossaryTable =
+                                      rows.length > 0 &&
+                                      rows[0]?.some(
+                                        (header: string) =>
+                                          header
+                                            .toLowerCase()
+                                            .includes('term') ||
+                                          header
+                                            .toLowerCase()
+                                            .includes('definition')
+                                      )
+
+                                    // For glossary tables, make first column narrower (30% vs 70%)
+                                    const adjustedCellStyle =
+                                      isGlossaryTable &&
+                                      cellIndex === 0 &&
+                                      rows.length > 0
+                                        ? [
+                                            ...(Array.isArray(cellStyle)
+                                              ? cellStyle
+                                              : [cellStyle]),
+                                            { flex: 0.3 },
+                                          ]
+                                        : isGlossaryTable &&
+                                          cellIndex === 1 &&
+                                          rows.length > 0
+                                        ? [
+                                            ...(Array.isArray(cellStyle)
+                                              ? cellStyle
+                                              : [cellStyle]),
+                                            { flex: 1.7 },
+                                          ]
+                                        : cellStyle
+
                                     return (
                                       <View
                                         key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                        style={cellStyle}
+                                        style={adjustedCellStyle}
+                                        wrap={false}
                                       >
                                         <Text
                                           style={{
-                                            fontSize: isHeader ? 11 : 11,
+                                            fontSize: isHeader ? 10 : 10,
                                             fontFamily: 'Helvetica',
                                             fontWeight:
                                               isHeader || shouldBeBold
@@ -1934,7 +2424,7 @@ export function ReportPdf({
                                             color: isHeader
                                               ? '#ffffff'
                                               : severityColor || '#111827',
-                                            lineHeight: 1.7,
+                                            lineHeight: 1.6,
                                           }}
                                           wrap
                                         >
@@ -2022,11 +2512,12 @@ export function ReportPdf({
                                       return (
                                         <View
                                           key={`${item.key}-row-${rowIndex}`}
-                                          style={
+                                          style={[
                                             isHeader
                                               ? styles.tableHeaderRow
-                                              : styles.tableRow
-                                          }
+                                              : styles.tableRow,
+                                            { width: '100%' },
+                                          ]}
                                         >
                                           {row.map((cell, cellIndex) => {
                                             const isLastCell =
@@ -2107,16 +2598,52 @@ export function ReportPdf({
                                               }
                                             }
 
+                                            // Detect if this is a glossary table (Term/Definition columns)
+                                            const isGlossaryTable =
+                                              tableRows.length > 0 &&
+                                              tableRows[0]?.some(
+                                                (header: string) =>
+                                                  header
+                                                    .toLowerCase()
+                                                    .includes('term') ||
+                                                  header
+                                                    .toLowerCase()
+                                                    .includes('definition')
+                                              )
+
+                                            // For glossary tables, make first column narrower (30% vs 70%)
+                                            const adjustedCellStyle =
+                                              isGlossaryTable &&
+                                              cellIndex === 0 &&
+                                              tableRows.length > 0
+                                                ? [
+                                                    ...(Array.isArray(cellStyle)
+                                                      ? cellStyle
+                                                      : [cellStyle]),
+                                                    { flex: 0.3 },
+                                                  ]
+                                                : isGlossaryTable &&
+                                                  cellIndex === 1 &&
+                                                  tableRows.length > 0
+                                                ? [
+                                                    ...(Array.isArray(cellStyle)
+                                                      ? cellStyle
+                                                      : [cellStyle]),
+                                                    { flex: 1.7 },
+                                                  ]
+                                                : cellStyle
+
                                             return (
                                               <View
                                                 key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                                style={cellStyle}
+                                                style={adjustedCellStyle}
+                                                wrap={false}
                                               >
                                                 <Text
                                                   style={{
                                                     fontSize: isHeader
-                                                      ? 11
-                                                      : 11,
+                                                      ? 10
+                                                      : 10,
                                                     fontFamily: 'Helvetica',
                                                     fontWeight:
                                                       isHeader || shouldBeBold
@@ -2126,7 +2653,7 @@ export function ReportPdf({
                                                       ? '#ffffff'
                                                       : severityColor ||
                                                         '#111827',
-                                                    lineHeight: 1.7,
+                                                    lineHeight: 1.6,
                                                   }}
                                                   wrap
                                                 >
@@ -2245,6 +2772,7 @@ export function ReportPdf({
                             : processed.level === 5
                             ? styles.heading5
                             : styles.heading6
+
                         return (
                           <View
                             key={item.key}

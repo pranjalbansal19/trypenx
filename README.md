@@ -23,14 +23,19 @@ A white-labelable, self-serve platform for automated AI-powered penetration test
 ```bash
 npm install
 ```
-2. Set up OpenAI API key (for AI folder conversion)
+2. Set up environment variables
    - Create a `.env` file in the root directory
-   - Add your OpenAI API key:
+   - Add your configuration:
    ```
+   # Application Password Protection (required)
+   VITE_APP_PASSWORD=your-secure-password-here
+   
+   # OpenAI API key (optional - for AI folder conversion)
    VITE_OPENAI_API_KEY=your_openai_api_key_here
    ```
-   - Get your API key from: https://platform.openai.com/api-keys
-   - Note: Without this key, folder uploads will use raw files instead of AI-generated summaries
+   - **Password Protection**: Set `VITE_APP_PASSWORD` to protect the application. If not set, defaults to `CyberSentry2024!`
+   - **OpenAI API Key**: Get your API key from https://platform.openai.com/api-keys
+   - Note: Without OpenAI key, folder uploads will use raw files instead of AI-generated summaries
 3. Run dev server
 ```bash
 npm run dev
@@ -39,6 +44,13 @@ npm run dev
 ```bash
 npm run build && npm run preview
 ```
+
+## Password Protection
+The application is protected by a password prompt that appears before accessing any page. 
+- Password is stored in `VITE_APP_PASSWORD` environment variable
+- Default password (if not set): `CyberSentry2024!`
+- Authentication is stored in sessionStorage (cleared when browser session ends)
+- All routes are protected - users must enter the password to access the application
 
 ## Project Structure
 ```
