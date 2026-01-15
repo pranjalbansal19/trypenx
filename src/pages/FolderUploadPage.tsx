@@ -528,9 +528,12 @@ export function FolderUploadPage() {
   }
 
   // Extract severity counts from AI-generated report content
-  function extractSeverityFromContent(
-    content: string
-  ): { critical: number; high: number; medium: number; low: number } {
+  function extractSeverityFromContent(content: string): {
+    critical: number
+    high: number
+    medium: number
+    low: number
+  } {
     const severitySummary = {
       critical: 0,
       high: 0,
@@ -540,45 +543,98 @@ export function FolderUploadPage() {
 
     const contentLower = content.toLowerCase()
 
-    // Look for severity distribution tables or counts
-    // Pattern 1: Table format with severity counts
-    const tablePattern = /\|.*severity.*\|.*count.*\|/gi
-    const tableMatches = content.match(tablePattern)
-    if (tableMatches) {
-      // Extract rows from table
-      const lines = content.split('\n')
+    // Look for severity/observation distribution tables or counts
+    // Pattern 1: Table format with severity/observation counts
+    // Match both "Severity" and "Observation Level" tables
+    // Also look for "5.2 Severity Distribution" section specifically
+    const severitySectionMatch = content.match(
+      /5\.2\s+Severity\s+Distribution[\s\S]*?(?=###|##|$)/i
+    )
+    const sectionToSearch = severitySectionMatch
+      ? severitySectionMatch[0]
+      : content
+
+    // Look for table patterns - be more flexible
+    // Pattern 1a: Standard table with header "| Severity | Count |" or "| Observation Level | Count |"
+    const tablePattern = /\|.*(?:severity|observation\s+level).*\|.*count.*\|/gi
+    const tableMatches = sectionToSearch.match(tablePattern)
+
+    // Pattern 1b: Also look for any table rows with High/Medium/Low and numbers
+    const tableRowPattern =
+      /\|\s*(?:High|Medium|Low|Critical)\s*\|\s*(\d+)\s*\|/gi
+
+    if (tableMatches || tableRowPattern.test(sectionToSearch)) {
+      // Extract rows from table - search in the severity distribution section
+      const lines = sectionToSearch.split('\n')
+      let inTable = false
+      let foundHeader = false
+
       for (const line of lines) {
-        if (line.includes('|') && line.toLowerCase().includes('severity')) {
+        const lowerLine = line.toLowerCase()
+        const trimmedLine = line.trim()
+
+        // Check if we're entering a severity/observation table
+        if (
+          trimmedLine.includes('|') &&
+          (lowerLine.includes('severity') ||
+            lowerLine.includes('observation level') ||
+            lowerLine.includes('observation'))
+        ) {
+          inTable = true
+          foundHeader = true
           continue // Skip header
         }
-        const lowerLine = line.toLowerCase()
-        if (lowerLine.includes('critical')) {
-          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
-          if (countMatch && countMatch[1]) {
-            severitySummary.critical = parseInt(countMatch[1], 10)
+
+        // Also check for separator lines (---|----|----)
+        if (trimmedLine.includes('|') && trimmedLine.match(/^[\|\s\-]+$/)) {
+          if (foundHeader) {
+            continue // Skip separator, but we're still in the table
           }
-        } else if (lowerLine.includes('high') && !lowerLine.includes('medium')) {
-          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
-          if (countMatch && countMatch[1]) {
-            severitySummary.high = parseInt(countMatch[1], 10)
+        }
+
+        // Check if we're leaving the table (empty line or new section)
+        if (inTable && trimmedLine === '') {
+          // Empty line might end the table, but continue checking
+          if (foundHeader) {
+            // We found the header, so process any remaining table rows
           }
-        } else if (lowerLine.includes('medium')) {
-          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
-          if (countMatch && countMatch[1]) {
-            severitySummary.medium = parseInt(countMatch[1], 10)
-          }
-        } else if (lowerLine.includes('low')) {
-          const countMatch = line.match(/\|\s*(\d+)\s*\|/)
-          if (countMatch && countMatch[1]) {
-            severitySummary.low = parseInt(countMatch[1], 10)
+        }
+
+        // Process table rows
+        if (trimmedLine.includes('|') && (inTable || foundHeader)) {
+          // Extract severity/observation level and count from table row
+          const parts = trimmedLine
+            .split('|')
+            .map((p) => p.trim())
+            .filter((p) => p)
+          if (parts.length >= 2 && parts[0] && parts[1]) {
+            const level = parts[0].toLowerCase()
+            const countStr = parts[1]
+            const count = parseInt(countStr, 10)
+
+            if (!isNaN(count) && count > 0) {
+              if (level === 'critical' || level.includes('critical')) {
+                severitySummary.critical = count
+              } else if (
+                level === 'high' ||
+                (level.includes('high') && !level.includes('medium'))
+              ) {
+                severitySummary.high = count
+              } else if (level === 'medium' || level.includes('medium')) {
+                severitySummary.medium = count
+              } else if (level === 'low' || level.includes('low')) {
+                severitySummary.low = count
+              }
+            }
           }
         }
       }
     }
 
-    // Pattern 2: Text patterns like "Critical severity findings: X"
+    // Pattern 2: Text patterns like "Critical severity findings: X" or "High observations: X"
+    // Also match "Observation:" patterns for soft scans
     const criticalMatch = content.match(
-      /critical\s+severity\s+findings?[:\s]+(\d+)/gi
+      /(?:critical\s+(?:severity|observations?)|observation.*critical)[:\s]+(\d+)/gi
     )
     if (criticalMatch) {
       const countMatch = criticalMatch[0].match(/(\d+)/)
@@ -587,7 +643,9 @@ export function FolderUploadPage() {
       }
     }
 
-    const highMatch = content.match(/high\s+severity\s+findings?[:\s]+(\d+)/gi)
+    const highMatch = content.match(
+      /(?:high\s+(?:severity|observations?)|observation.*high)[:\s]+(\d+)/gi
+    )
     if (highMatch) {
       const countMatch = highMatch[0].match(/(\d+)/)
       if (countMatch && countMatch[1]) {
@@ -596,7 +654,7 @@ export function FolderUploadPage() {
     }
 
     const mediumMatch = content.match(
-      /medium\s+severity\s+findings?[:\s]+(\d+)/gi
+      /(?:medium\s+(?:severity|observations?)|observation.*medium)[:\s]+(\d+)/gi
     )
     if (mediumMatch) {
       const countMatch = mediumMatch[0].match(/(\d+)/)
@@ -605,7 +663,9 @@ export function FolderUploadPage() {
       }
     }
 
-    const lowMatch = content.match(/low\s+severity\s+findings?[:\s]+(\d+)/gi)
+    const lowMatch = content.match(
+      /(?:low\s+(?:severity|observations?)|observation.*low)[:\s]+(\d+)/gi
+    )
     if (lowMatch) {
       const countMatch = lowMatch[0].match(/(\d+)/)
       if (countMatch && countMatch[1]) {
@@ -613,25 +673,65 @@ export function FolderUploadPage() {
       }
     }
 
-    // Pattern 3: Count occurrences of "**Severity:** Critical/High/Medium/Low" in findings
+    // Pattern 3: Look for table rows like "| High | 3 |" or "| High | 3 |" format
+    // This handles cases where the table format is slightly different
+    // Focus on the Severity Distribution section
     if (
       severitySummary.critical === 0 &&
       severitySummary.high === 0 &&
       severitySummary.medium === 0 &&
       severitySummary.low === 0
     ) {
-      // Fallback: count severity mentions in findings
+      const lines = sectionToSearch.split('\n')
+      for (const line of lines) {
+        if (line.includes('|')) {
+          const parts = line
+            .split('|')
+            .map((p) => p.trim())
+            .filter((p) => p)
+          if (parts.length >= 2 && parts[0] && parts[1]) {
+            const level = parts[0].toLowerCase()
+            const countStr = parts[1]
+            const count = parseInt(countStr, 10)
+
+            if (!isNaN(count)) {
+              if (level === 'critical' || level.includes('critical')) {
+                severitySummary.critical = count
+              } else if (
+                level === 'high' ||
+                (level.includes('high') && !level.includes('medium'))
+              ) {
+                severitySummary.high = count
+              } else if (level === 'medium' || level.includes('medium')) {
+                severitySummary.medium = count
+              } else if (level === 'low' || level.includes('low')) {
+                severitySummary.low = count
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Pattern 4: Count occurrences of "**Severity:**" or "**Observation:**" in findings
+    if (
+      severitySummary.critical === 0 &&
+      severitySummary.high === 0 &&
+      severitySummary.medium === 0 &&
+      severitySummary.low === 0
+    ) {
+      // Fallback: count severity/observation mentions in findings
       const criticalCount = (
-        content.match(/\*\*severity:\*\*\s*critical/gi) || []
+        content.match(/\*\*(?:severity|observation):\*\*\s*critical/gi) || []
       ).length
       const highCount = (
-        content.match(/\*\*severity:\*\*\s*high/gi) || []
+        content.match(/\*\*(?:severity|observation):\*\*\s*high/gi) || []
       ).length
       const mediumCount = (
-        content.match(/\*\*severity:\*\*\s*medium/gi) || []
+        content.match(/\*\*(?:severity|observation):\*\*\s*medium/gi) || []
       ).length
       const lowCount = (
-        content.match(/\*\*severity:\*\*\s*low/gi) || []
+        content.match(/\*\*(?:severity|observation):\*\*\s*low/gi) || []
       ).length
 
       severitySummary.critical = criticalCount
@@ -742,10 +842,16 @@ export function FolderUploadPage() {
         'characters'
       )
 
+      // Get company name from branding for appending at sentence ends
+      const companyName = branding.name.toLowerCase().includes('onecom')
+        ? 'onecom.com'
+        : ''
+
       const aiResult = await generateExecutiveSummary({
         files: folderData.files,
         folderName: folderData.folderName,
         pentestType: pentestType,
+        companyName: companyName,
       })
 
       if (aiResult.success && aiResult.summary) {
@@ -767,11 +873,45 @@ export function FolderUploadPage() {
         // Extract severity counts from report content
         const severitySummary = extractSeverityFromContent(aiResult.summary)
         console.log('Extracted severity counts:', severitySummary)
+        console.log('Severity summary breakdown:', {
+          critical: severitySummary.critical,
+          high: severitySummary.high,
+          medium: severitySummary.medium,
+          low: severitySummary.low,
+          total:
+            severitySummary.critical +
+            severitySummary.high +
+            severitySummary.medium +
+            severitySummary.low,
+        })
+
+        // If all zeros, log a warning and try to find the table manually
+        if (
+          severitySummary.critical === 0 &&
+          severitySummary.high === 0 &&
+          severitySummary.medium === 0 &&
+          severitySummary.low === 0
+        ) {
+          console.warn(
+            '⚠️ WARNING: All severity counts are zero. The chart will show zeros.'
+          )
+          console.warn(
+            'Searching for severity distribution table in AI summary...'
+          )
+          // Try to find the table manually
+          const tableMatch = aiResult.summary.match(
+            /\|.*(?:High|Medium|Low).*\|\s*(\d+)\s*\|/gi
+          )
+          if (tableMatch) {
+            console.log('Found potential table rows:', tableMatch)
+          }
+        }
 
         const report: PreparedReportData = {
           domain: folderData.folderName,
           sections: sections,
           severitySummary: severitySummary,
+          pentestType: pentestType,
         }
         setReportData(report)
         console.log('✓ Report data prepared and ready for PDF generation')
@@ -923,12 +1063,13 @@ export function FolderUploadPage() {
             </span>
           </div>
           <p className="text-sm text-white/70 text-center max-w-lg">
-            Sending processed files to AI with detailed prompt. AI is analyzing
-            your penetration test data and generating a comprehensive 4-5 page
-            professional summary report...
+            Processing and optimizing your files for AI analysis. Large files
+            are being intelligently sampled to preserve important findings while
+            staying within processing limits. AI is analyzing your data and
+            generating a comprehensive professional report...
           </p>
           <p className="text-xs text-white/50">
-            This may take 1-2 minutes. Please wait...
+            This may take 2-5 minutes for large datasets. Please wait...
           </p>
         </div>
       )}

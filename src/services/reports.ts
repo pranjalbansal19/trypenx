@@ -23,6 +23,7 @@ export interface PreparedReportData {
     recommendation: string
   }>
   domainFiles?: DomainFile[]
+  pentestType?: 'aggressive' | 'soft'
 }
 
 // Fetch markdown/text files from domain folder structure and prepare report

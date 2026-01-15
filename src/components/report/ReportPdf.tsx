@@ -159,6 +159,47 @@ function isTableSeparator(line: string): boolean {
   )
 }
 
+// Helper function to parse inline bold text and return segments
+function parseInlineBold(text: string): Array<{ text: string; bold: boolean }> {
+  const segments: Array<{ text: string; bold: boolean }> = []
+  let currentIndex = 0
+  const regex = /\*\*([^*]+)\*\*/g
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the bold marker
+    if (match.index > currentIndex) {
+      segments.push({
+        text: text.substring(currentIndex, match.index),
+        bold: false,
+      })
+    }
+    // Add the bold text (without markers)
+    if (match[1]) {
+      segments.push({
+        text: match[1],
+        bold: true,
+      })
+    }
+    currentIndex = match.index + match[0].length
+  }
+
+  // Add remaining text after last bold marker
+  if (currentIndex < text.length) {
+    segments.push({
+      text: text.substring(currentIndex),
+      bold: false,
+    })
+  }
+
+  // If no bold markers found, return the whole text as non-bold
+  if (segments.length === 0) {
+    segments.push({ text: text.replace(/\*\*/g, ''), bold: false })
+  }
+
+  return segments
+}
+
 // Helper function to process markdown content - remove hashtags, bold markers, and format headings
 function processMarkdownLine(line: string): {
   isHeading: boolean
@@ -169,6 +210,7 @@ function processMarkdownLine(line: string): {
   isTable: boolean
   isCodeFence: boolean
   codeLanguage?: string
+  hasInlineBold?: boolean
 } {
   const trimmed = line.trim()
 
@@ -183,7 +225,8 @@ function processMarkdownLine(line: string): {
       isBullet: false,
       isTable: false,
       isCodeFence: true,
-      codeLanguage: language,
+      codeLanguage: language || undefined,
+      hasInlineBold: false,
     }
   }
 
@@ -197,6 +240,7 @@ function processMarkdownLine(line: string): {
       isBullet: false,
       isTable: true,
       isCodeFence: false,
+      hasInlineBold: false,
     }
   }
 
@@ -230,11 +274,12 @@ function processMarkdownLine(line: string): {
     headingText = headingText.substring(2).trim()
   }
 
-  // Remove ** bold markers from text (both opening and closing)
-  const cleanText = headingText.replace(/\*\*/g, '').trim()
-
   // Check if original text had ** markers (for bold formatting in regular text)
   const hasBold = line.includes('**')
+  const hasInlineBold = /\*\*[^*]+\*\*/.test(headingText)
+
+  // Remove ** bold markers from text (both opening and closing) for headings
+  const cleanText = headingText.replace(/\*\*/g, '').trim()
 
   if (headingLevel > 0) {
     return {
@@ -245,17 +290,19 @@ function processMarkdownLine(line: string): {
       isBullet: false,
       isTable: false,
       isCodeFence: false,
+      hasInlineBold: false,
     }
   }
 
   return {
     isHeading: false,
     level: 0,
-    text: cleanText,
-    isBold: hasBold,
+    text: headingText, // Keep original text with markers for inline bold parsing
+    isBold: hasBold && !hasInlineBold, // Only set isBold if entire line is bold, not inline
     isBullet: isBullet,
     isTable: false,
     isCodeFence: false,
+    hasInlineBold: hasInlineBold,
   }
 }
 
@@ -802,7 +849,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#9ca3af',
     borderBottomStyle: 'solid',
     backgroundColor: '#ffffff',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     width: '100%',
   },
   tableHeaderRow: {
@@ -811,31 +858,34 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#9ca3af',
     borderBottomStyle: 'solid',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     width: '100%',
   },
   tableCell: {
     flex: 1,
-    padding: 12,
+    padding: 10,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 10,
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#111827',
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     borderRightWidth: 1,
     borderRightColor: '#9ca3af',
     borderRightStyle: 'solid',
     textAlign: 'left',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
     backgroundColor: '#ffffff',
-    minWidth: 120,
+    minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
   },
   tableHeaderCell: {
     flex: 1,
-    padding: 12,
+    padding: 10,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 10,
@@ -847,7 +897,10 @@ const styles = StyleSheet.create({
     borderRightColor: '#6b7280',
     borderRightStyle: 'solid',
     textAlign: 'left',
-    minWidth: 120,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
   },
@@ -1539,7 +1592,11 @@ export function ReportPdf({
 
           {/* Main Title */}
           <View style={styles.coverTitleContainer}>
-            <Text style={styles.coverMainTitle}>Vulnerability Scan Report</Text>
+            <Text style={styles.coverMainTitle}>
+              {data.pentestType === 'aggressive'
+                ? 'Aggressive Penetration Test Report'
+                : 'Vulnerability Scan Report'}
+            </Text>
             <Text style={styles.coverSubtitle}>For {data.domain}</Text>
           </View>
 
@@ -1646,7 +1703,10 @@ export function ReportPdf({
             <View style={styles.contentFooterDivider} />
             <View style={styles.contentFooterContent}>
               <Text style={styles.contentFooterText}>
-                AI Penetration Test Report {data.domain} -{' '}
+                {data.pentestType === 'aggressive'
+                  ? 'AI Penetration Test Report'
+                  : 'Vulnerability Scan Report'}{' '}
+                {data.domain} -{' '}
                 {new Date().toLocaleDateString('en-GB', {
                   day: 'numeric',
                   month: 'long',
@@ -1665,7 +1725,7 @@ export function ReportPdf({
           Confidentiality Statement
         </Text>
         <Text style={styles.confidentialitySubtitle}>
-          Critical information handling and data protection guidelines
+          Information handling and data protection guidelines
         </Text>
 
         {/* Summary Box */}
@@ -1675,34 +1735,18 @@ export function ReportPdf({
           </Text>
           <View style={styles.confidentialityDivider} />
           <Text style={styles.confidentialityBoxText}>
-            This penetration test report has been prepared for the exclusive use
-            of{' '}
+            This{' '}
+            {data.pentestType === 'aggressive'
+              ? 'penetration test'
+              : 'vulnerability scan'}{' '}
+            report has been prepared for the exclusive use of{' '}
             <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>
-            . The report contains sensitive security information, including
-            identified vulnerabilities, system configurations, and detailed
-            remediation recommendations. All information contained herein is
-            considered confidential and proprietary to{' '}
+            . The report contains security information, including identified
+            observations, system configurations, and detailed remediation
+            recommendations. All information contained herein is considered
+            confidential and proprietary to{' '}
             <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>
             .
-          </Text>
-        </View>
-
-        {/* Urgent Section */}
-        <View style={styles.confidentialityBoxUrgent}>
-          <Text style={styles.confidentialityBoxTitleUrgent}>
-            ⚠ CRITICAL HANDLING REQUIREMENTS
-          </Text>
-          <Text style={styles.confidentialityBoxText}>
-            This report contains highly sensitive security information that
-            could be exploited if disclosed to unauthorized parties.{' '}
-            <Text style={styles.confidentialityBoxTextBold}>
-              Immediate action is required
-            </Text>{' '}
-            to secure this document and limit access to authorized personnel
-            only. Unauthorized disclosure could compromise{' '}
-            <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>
-            's security posture and enable attackers to exploit identified
-            vulnerabilities.
           </Text>
         </View>
 
@@ -1713,15 +1757,25 @@ export function ReportPdf({
           </Text>
           <View style={styles.confidentialityDivider} />
           <Text style={styles.confidentialityBoxText}>
-            This comprehensive penetration test report is designed to assist{' '}
+            This{' '}
+            {data.pentestType === 'aggressive'
+              ? 'comprehensive penetration test'
+              : 'vulnerability scan'}{' '}
+            report is designed to assist{' '}
             <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>{' '}
             in understanding their security posture, identifying
-            vulnerabilities, and prioritizing remediation efforts. The report
-            includes actionable recommendations tailored to{' '}
+            {data.pentestType === 'aggressive'
+              ? ' vulnerabilities'
+              : ' potential security exposures'}
+            , and prioritizing remediation efforts. The report includes
+            actionable recommendations tailored to{' '}
             <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>
             's specific environment, risk tolerance, and business requirements.
             The findings and recommendations are based on industry best
-            practices, security frameworks, and real-world attack scenarios
+            practices, security frameworks, and{' '}
+            {data.pentestType === 'aggressive'
+              ? 'real-world attack scenarios'
+              : 'external security assessment methodologies'}
             relevant to{' '}
             <Text style={styles.confidentialityBoxTextBold}>{data.domain}</Text>
             's infrastructure.
@@ -1733,7 +1787,10 @@ export function ReportPdf({
           <View style={styles.contentFooterDivider} />
           <View style={styles.contentFooterContent}>
             <Text style={styles.contentFooterText}>
-              AI Penetration Test Report {data.domain} -{' '}
+              {data.pentestType === 'aggressive'
+                ? 'AI Penetration Test Report'
+                : 'Vulnerability Scan Report'}{' '}
+              {data.domain} -{' '}
               {new Date().toLocaleDateString('en-GB', {
                 day: 'numeric',
                 month: 'long',
@@ -1930,6 +1987,9 @@ export function ReportPdf({
               titleLower.includes('remediation priority matrix') ||
               titleLower.includes('priority matrix') ||
               titleLower.includes('6.4')
+            const isWhatThisScanSection =
+              titleLower.includes('what this scan is') ||
+              titleLower.includes('1.1')
 
             // Check if this is Risk Trend Analysis section - more flexible detection
             const contentLower = String(s.content).toLowerCase()
@@ -1959,6 +2019,254 @@ export function ReportPdf({
                   </View>
                 )}
                 <View wrap={false}>
+                  {/* Special rendering for What This Scan Is section */}
+                  {isWhatThisScanSection && (
+                    <View wrap={false}>
+                      {(() => {
+                        const whatThisScanIs: string[] = []
+                        const whatThisScanIsNot: string[] = []
+                        let importantNote = ''
+                        let currentSection: 'is' | 'isNot' | 'note' | null =
+                          null
+
+                        contentLines.forEach((line) => {
+                          const trimmed = line.trim()
+                          if (!trimmed) return
+
+                          // Detect section headers (case-insensitive, flexible matching)
+                          const lowerTrimmed = trimmed.toLowerCase()
+                          if (
+                            lowerTrimmed.includes('what this scan is:') &&
+                            !lowerTrimmed.includes('not')
+                          ) {
+                            currentSection = 'is'
+                            return
+                          }
+                          if (
+                            lowerTrimmed.includes('what this scan is not:') ||
+                            (lowerTrimmed.includes('what this scan is not') &&
+                              !lowerTrimmed.includes('what this scan is:'))
+                          ) {
+                            currentSection = 'isNot'
+                            return
+                          }
+                          if (
+                            lowerTrimmed.includes('important note:') ||
+                            lowerTrimmed.includes('**important note:**')
+                          ) {
+                            currentSection = 'note'
+                            // Extract note text if on same line
+                            const noteMatch = trimmed.match(
+                              /\*\*Important Note:\*\*\s*(.+)/i
+                            )
+                            if (noteMatch && noteMatch[1]) {
+                              importantNote = noteMatch[1]
+                                .replace(/\*\*/g, '')
+                                .trim()
+                            }
+                            return
+                          }
+
+                          // Stop if we hit another section header
+                          if (
+                            trimmed.startsWith('###') ||
+                            trimmed.startsWith('##') ||
+                            (trimmed.startsWith('**') &&
+                              (lowerTrimmed.includes('what this scan') ||
+                                lowerTrimmed.includes('important note')))
+                          ) {
+                            // Check if it's a new section
+                            if (
+                              !lowerTrimmed.includes('what this scan is:') &&
+                              !lowerTrimmed.includes(
+                                'what this scan is not:'
+                              ) &&
+                              !lowerTrimmed.includes('important note:')
+                            ) {
+                              currentSection = null
+                            }
+                            return
+                          }
+
+                          // Collect content based on current section
+                          if (currentSection === 'is') {
+                            if (
+                              trimmed.startsWith('•') ||
+                              trimmed.startsWith('-') ||
+                              trimmed.startsWith('*')
+                            ) {
+                              const cleanItem = trimmed
+                                .replace(/^[•\-*]\s*/, '')
+                                .replace(/\*\*/g, '')
+                                .trim()
+                              if (cleanItem) whatThisScanIs.push(cleanItem)
+                            }
+                          } else if (currentSection === 'isNot') {
+                            // Handle various bullet point formats
+                            if (
+                              trimmed.startsWith('•') ||
+                              trimmed.startsWith('-') ||
+                              trimmed.startsWith('*') ||
+                              trimmed.includes('❌') ||
+                              trimmed.toLowerCase().startsWith('not a') ||
+                              trimmed.toLowerCase().startsWith('not an') ||
+                              trimmed.toLowerCase().startsWith('not ')
+                            ) {
+                              let cleanItem = trimmed
+                                .replace(/^[•\-*❌]\s*/, '')
+                                .replace(/^❌\s*/, '')
+                                .replace(/\*\*/g, '')
+                                .trim()
+
+                              // Ensure it starts with "Not" if it doesn't already
+                              if (
+                                !cleanItem.toLowerCase().startsWith('not a') &&
+                                !cleanItem.toLowerCase().startsWith('not an') &&
+                                !cleanItem.toLowerCase().startsWith('not ')
+                              ) {
+                                cleanItem = 'Not ' + cleanItem
+                              }
+
+                              if (cleanItem) whatThisScanIsNot.push(cleanItem)
+                            }
+                          } else if (currentSection === 'note') {
+                            if (trimmed && !trimmed.startsWith('**')) {
+                              const cleanLine = trimmed
+                                .replace(/\*\*/g, '')
+                                .trim()
+                              if (cleanLine) {
+                                importantNote +=
+                                  (importantNote ? ' ' : '') + cleanLine
+                              }
+                            }
+                          }
+                        })
+
+                        return (
+                          <View wrap={false}>
+                            {/* What this scan is box - always show with default items if empty */}
+                            <View
+                              style={styles.priorityMatrixCard}
+                              wrap={false}
+                            >
+                              <Text style={styles.priorityMatrixTitle}>
+                                What this scan is:
+                              </Text>
+                              {whatThisScanIs.length > 0 ? (
+                                whatThisScanIs.map((item, idx) => (
+                                  <Text
+                                    key={idx}
+                                    style={styles.priorityMatrixText}
+                                    wrap
+                                  >
+                                    • {item}
+                                  </Text>
+                                ))
+                              ) : (
+                                <>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • A consent-based, external vulnerability
+                                    scan
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Focused on publicly exposed services and
+                                    configurations
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Intended to highlight potential areas for
+                                    review
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Suitable for regular monitoring and early
+                                    risk awareness
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Non-intrusive and designed to identify
+                                    potential security hygiene issues
+                                  </Text>
+                                </>
+                              )}
+                            </View>
+
+                            {/* What this scan is not box - always show with default items if empty */}
+                            <View
+                              style={styles.priorityMatrixCard}
+                              wrap={false}
+                            >
+                              <Text style={styles.priorityMatrixTitle}>
+                                What this scan is not:
+                              </Text>
+                              {whatThisScanIsNot.length > 0 ? (
+                                whatThisScanIsNot.map((item, idx) => {
+                                  // Clean the item - remove ❌ and ensure proper formatting
+                                  const cleanItem = item
+                                    .replace(/^❌\s*/, '')
+                                    .trim()
+                                  return (
+                                    <Text
+                                      key={idx}
+                                      style={styles.priorityMatrixText}
+                                      wrap
+                                    >
+                                      • {cleanItem}
+                                    </Text>
+                                  )
+                                })
+                              ) : (
+                                <>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not a penetration test
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not an exploitative assessment
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not an internal network review
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not confirmation of compromise or breach
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not an assessment of application logic
+                                    flaws
+                                  </Text>
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    • Not an authentication bypass test
+                                  </Text>
+                                </>
+                              )}
+                            </View>
+
+                            {/* Important Note box */}
+                            {importantNote && (
+                              <View
+                                style={[
+                                  styles.priorityMatrixCard,
+                                  {
+                                    backgroundColor: '#f0f9ff',
+                                    borderColor: '#93c5fd',
+                                  },
+                                ]}
+                                wrap={false}
+                              >
+                                <Text
+                                  style={[
+                                    styles.priorityMatrixTitle,
+                                    { color: '#1e40af' },
+                                  ]}
+                                >
+                                  Important Note:
+                                </Text>
+                                <Text style={styles.priorityMatrixText} wrap>
+                                  {importantNote}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )
+                      })()}
+                    </View>
+                  )}
                   {/* Special rendering for Roadmap and Priority Matrix sections */}
                   {(isRoadmapSection || isPriorityMatrixSection) && (
                     <View wrap={false}>
@@ -2020,11 +2328,15 @@ export function ReportPdf({
                             })
                           }
 
-                          // Detect priority matrix
+                          // Detect priority matrix - ONLY in priority matrix section (6.4), NOT in roadmap section
                           const priorityMatch = trimmed.match(
                             /^\*\*(Critical|High|Medium|Low)\s*\(([^)]+)\):\*\*/i
                           )
-                          if (priorityMatch && isPriorityMatrixSection) {
+                          if (
+                            priorityMatch &&
+                            isPriorityMatrixSection &&
+                            !isRoadmapSection
+                          ) {
                             const priority = priorityMatch[1]
                             const timeframe = priorityMatch[2]
                             const priorityContent: string[] = []
@@ -2034,17 +2346,47 @@ export function ReportPdf({
                               contentLines[i] &&
                               !contentLines[i]
                                 ?.trim()
-                                .match(/^\*\*(Critical|High|Medium|Low)\s*\(/i)
+                                .match(
+                                  /^\*\*(Critical|High|Medium|Low)\s*\(/i
+                                ) &&
+                              !contentLines[i]?.trim().startsWith('###') &&
+                              !contentLines[i]?.trim().startsWith('##')
                             ) {
                               const nextLine = contentLines[i]?.trim()
+                              if (!nextLine) {
+                                i++
+                                continue
+                              }
+                              // Handle bullet points (various formats)
                               if (
-                                nextLine &&
-                                (nextLine.startsWith('-') ||
-                                  nextLine.startsWith('*'))
+                                nextLine.startsWith('-') ||
+                                nextLine.startsWith('*') ||
+                                nextLine.startsWith('•')
                               ) {
-                                priorityContent.push(
-                                  nextLine.replace(/^[-*]\s*/, '')
-                                )
+                                const cleanItem = nextLine
+                                  .replace(/^[-*•]\s*/, '')
+                                  .replace(/\*\*/g, '')
+                                  .trim()
+                                if (cleanItem) {
+                                  priorityContent.push(cleanItem)
+                                }
+                              }
+                              // Also handle lines that are part of the content (not headers)
+                              else if (
+                                !nextLine.startsWith('**') &&
+                                !nextLine.startsWith('#') &&
+                                nextLine.length > 0
+                              ) {
+                                // This might be continuation text, add it
+                                const cleanItem = nextLine
+                                  .replace(/\*\*/g, '')
+                                  .trim()
+                                if (
+                                  cleanItem &&
+                                  !cleanItem.match(/^\[List specific/i)
+                                ) {
+                                  priorityContent.push(cleanItem)
+                                }
                               }
                               i++
                             }
@@ -2197,32 +2539,68 @@ export function ReportPdf({
                           }
                         }
 
-                        // Render priority matrix cards
-                        otherContent
-                          .filter((c) => c.type === 'priority')
-                          .forEach((item) => {
-                            const { priority, timeframe, content } = item.data
+                        // Render priority matrix cards ONLY in priority matrix section (6.4)
+                        if (isPriorityMatrixSection) {
+                          const priorityLevels = [
+                            { priority: 'Critical', timeframe: '0-7 days' },
+                            { priority: 'High', timeframe: '1-4 weeks' },
+                            { priority: 'Medium', timeframe: '1-3 months' },
+                            { priority: 'Low', timeframe: '3-12 months' },
+                          ]
+
+                          // Get all parsed priority items
+                          const parsedPriorityItems = otherContent.filter(
+                            (c) => c.type === 'priority'
+                          )
+
+                          // Always render all 4 priority levels
+                          // If we found parsed items, use those; otherwise use fallback text
+                          priorityLevels.forEach((level) => {
+                            const foundItem = parsedPriorityItems.find(
+                              (item) =>
+                                item.data.priority.toLowerCase() ===
+                                level.priority.toLowerCase()
+                            )
+
+                            const content = foundItem
+                              ? foundItem.data.content
+                              : []
+                            const hasContent = content.length > 0
+
                             rendered.push(
                               <View
-                                key={`priority-${item.lineIdx}`}
+                                key={`priority-${level.priority}`}
                                 style={styles.priorityMatrixCard}
                                 wrap={false}
                               >
                                 <Text style={styles.priorityMatrixTitle}>
-                                  {priority} ({timeframe})
+                                  {level.priority} ({level.timeframe})
                                 </Text>
-                                {content.map((text: string, idx: number) => (
-                                  <Text
-                                    key={idx}
-                                    style={styles.priorityMatrixText}
-                                    wrap
-                                  >
-                                    • {text}
+                                {hasContent ? (
+                                  content.map((text: string, idx: number) => (
+                                    <Text
+                                      key={idx}
+                                      style={styles.priorityMatrixText}
+                                      wrap
+                                    >
+                                      • {text}
+                                    </Text>
+                                  ))
+                                ) : (
+                                  <Text style={styles.priorityMatrixText} wrap>
+                                    {level.priority === 'Critical'
+                                      ? 'No critical findings identified in this scan. However, any critical findings discovered in future scans should be addressed within 0-7 days.'
+                                      : level.priority === 'High'
+                                      ? 'No high-severity findings identified in this scan. High-severity findings typically include issues that could potentially lead to unauthorized access or data exposure if left unaddressed.'
+                                      : level.priority === 'Medium'
+                                      ? 'No medium-severity findings identified in this scan. Medium-severity findings typically include configuration issues and best practice recommendations.'
+                                      : 'No low-severity findings identified in this scan. Low-severity findings typically include informational observations and minor configuration improvements.'}
                                   </Text>
-                                ))}
+                                )}
                               </View>
                             )
                           })
+                        }
 
                         // Render long-term roadmap
                         otherContent
@@ -2278,9 +2656,10 @@ export function ReportPdf({
                       })()}
                     </View>
                   )}
-                  {/* Process regular content - skip if cards were already rendered for roadmap/priority sections */}
+                  {/* Process regular content - skip if cards were already rendered for roadmap/priority/whatThisScan sections */}
                   {!isRoadmapSection &&
                     !isPriorityMatrixSection &&
+                    !isWhatThisScanSection &&
                     processedContent.map((item) => {
                       // Handle page break
                       if (item.type === 'pagebreak') {
@@ -2308,6 +2687,7 @@ export function ReportPdf({
                                       : styles.tableRow,
                                     { width: '100%' },
                                   ]}
+                                  wrap={false}
                                 >
                                   {row.map((cell, cellIndex) => {
                                     const isLastCell =
@@ -2372,46 +2752,10 @@ export function ReportPdf({
                                       }
                                     }
 
-                                    // Detect if this is a glossary table (Term/Definition columns)
-                                    const isGlossaryTable =
-                                      rows.length > 0 &&
-                                      rows[0]?.some(
-                                        (header: string) =>
-                                          header
-                                            .toLowerCase()
-                                            .includes('term') ||
-                                          header
-                                            .toLowerCase()
-                                            .includes('definition')
-                                      )
-
-                                    // For glossary tables, make first column narrower (30% vs 70%)
-                                    const adjustedCellStyle =
-                                      isGlossaryTable &&
-                                      cellIndex === 0 &&
-                                      rows.length > 0
-                                        ? [
-                                            ...(Array.isArray(cellStyle)
-                                              ? cellStyle
-                                              : [cellStyle]),
-                                            { flex: 0.3 },
-                                          ]
-                                        : isGlossaryTable &&
-                                          cellIndex === 1 &&
-                                          rows.length > 0
-                                        ? [
-                                            ...(Array.isArray(cellStyle)
-                                              ? cellStyle
-                                              : [cellStyle]),
-                                            { flex: 1.7 },
-                                          ]
-                                        : cellStyle
-
                                     return (
                                       <View
                                         key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                        style={adjustedCellStyle}
-                                        wrap={false}
+                                        style={cellStyle}
                                       >
                                         <Text
                                           style={{
@@ -2424,7 +2768,7 @@ export function ReportPdf({
                                             color: isHeader
                                               ? '#ffffff'
                                               : severityColor || '#111827',
-                                            lineHeight: 1.6,
+                                            lineHeight: 1.5,
                                           }}
                                           wrap
                                         >
@@ -2518,6 +2862,7 @@ export function ReportPdf({
                                               : styles.tableRow,
                                             { width: '100%' },
                                           ]}
+                                          wrap={false}
                                         >
                                           {row.map((cell, cellIndex) => {
                                             const isLastCell =
@@ -2598,46 +2943,10 @@ export function ReportPdf({
                                               }
                                             }
 
-                                            // Detect if this is a glossary table (Term/Definition columns)
-                                            const isGlossaryTable =
-                                              tableRows.length > 0 &&
-                                              tableRows[0]?.some(
-                                                (header: string) =>
-                                                  header
-                                                    .toLowerCase()
-                                                    .includes('term') ||
-                                                  header
-                                                    .toLowerCase()
-                                                    .includes('definition')
-                                              )
-
-                                            // For glossary tables, make first column narrower (30% vs 70%)
-                                            const adjustedCellStyle =
-                                              isGlossaryTable &&
-                                              cellIndex === 0 &&
-                                              tableRows.length > 0
-                                                ? [
-                                                    ...(Array.isArray(cellStyle)
-                                                      ? cellStyle
-                                                      : [cellStyle]),
-                                                    { flex: 0.3 },
-                                                  ]
-                                                : isGlossaryTable &&
-                                                  cellIndex === 1 &&
-                                                  tableRows.length > 0
-                                                ? [
-                                                    ...(Array.isArray(cellStyle)
-                                                      ? cellStyle
-                                                      : [cellStyle]),
-                                                    { flex: 1.7 },
-                                                  ]
-                                                : cellStyle
-
                                             return (
                                               <View
                                                 key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                                style={adjustedCellStyle}
-                                                wrap={false}
+                                                style={cellStyle}
                                               >
                                                 <Text
                                                   style={{
@@ -2653,7 +2962,7 @@ export function ReportPdf({
                                                       ? '#ffffff'
                                                       : severityColor ||
                                                         '#111827',
-                                                    lineHeight: 1.6,
+                                                    lineHeight: 1.5,
                                                   }}
                                                   wrap
                                                 >
@@ -2686,11 +2995,46 @@ export function ReportPdf({
                         )
                       }
 
+                      // Skip priority matrix items that are already rendered in cards
+                      // Check if this line matches a priority matrix pattern
+                      // Also prevent priority matrix content from appearing in roadmap section (6.5)
+                      if (isPriorityMatrixSection || isRoadmapSection) {
+                        const priorityPattern =
+                          /^\*\*(Critical|High|Medium|Low)\s*\([^)]+\):\*\*/i
+                        if (priorityPattern.test(line.trim())) {
+                          // Skip this line - it's already rendered in the priority matrix cards (section 6.4)
+                          // OR it shouldn't appear in roadmap section (6.5)
+                          return null
+                        }
+                        // Also skip lines that are clearly part of priority matrix content
+                        // (they're already in the cards in section 6.4, or shouldn't be in roadmap section 6.5)
+                        const trimmedLine = line.trim()
+                        const isPriorityContent =
+                          /^[-*•]\s*(No\s+(critical|high|medium|low)-severity|SSRF|HTML|Malicious|HTTP|Immediate action|Disable|Restrict|Implement|Review)/i.test(
+                            trimmedLine
+                          ) ||
+                          /No\s+(critical|high|medium|low)-severity\s+findings/i.test(
+                            trimmedLine
+                          ) ||
+                          /(Critical|High|Medium|Low)\s*\([^)]+\)/.test(
+                            trimmedLine
+                          )
+                        // Skip priority matrix content in both sections:
+                        // - In priority matrix section: already rendered in cards
+                        // - In roadmap section: shouldn't appear there at all
+                        if (isPriorityContent) {
+                          return null
+                        }
+                      }
+
                       const processed = processMarkdownLine(line)
 
-                      // Check if this is a Severity or Priority field with pill styling
+                      // Check if this is a Severity, Observation, or Priority field with pill styling
                       const severityMatch = line.match(
                         /^\*\*Severity:\*\*\s*(Critical|High|Medium|Low)/i
+                      )
+                      const observationMatch = line.match(
+                        /^\*\*Observation:\*\*\s*(High|Medium|Low)/i
                       )
                       const priorityMatch = line.match(
                         /^\*\*Priority:\*\*\s*(Critical|High|Medium|Low)/i
@@ -2699,10 +3043,19 @@ export function ReportPdf({
                         /Overall Risk Rating:\s*(Critical|High|Medium|Low)/i
                       )
 
-                      if (severityMatch || priorityMatch || riskRatingMatch) {
+                      if (
+                        severityMatch ||
+                        observationMatch ||
+                        priorityMatch ||
+                        riskRatingMatch
+                      ) {
                         const match =
-                          severityMatch || priorityMatch || riskRatingMatch
+                          severityMatch ||
+                          observationMatch ||
+                          priorityMatch ||
+                          riskRatingMatch
                         let label = 'Severity'
+                        if (observationMatch) label = 'Observation'
                         if (priorityMatch) label = 'Priority'
                         if (riskRatingMatch) label = 'Overall Risk Rating'
 
@@ -2789,6 +3142,33 @@ export function ReportPdf({
                         )
                       }
                       if (processed.isBullet && processed.text) {
+                        // Handle inline bold in bullet points
+                        if (processed.hasInlineBold) {
+                          const segments = parseInlineBold(processed.text)
+                          return (
+                            <View
+                              key={item.key}
+                              style={{ marginBottom: 6 }}
+                              wrap={false}
+                            >
+                              <Text style={styles.bulletPoint} wrap>
+                                •{' '}
+                                {segments.map((segment, idx) => (
+                                  <Text
+                                    key={idx}
+                                    style={
+                                      segment.bold
+                                        ? [styles.bulletPoint, styles.boldText]
+                                        : styles.bulletPoint
+                                    }
+                                  >
+                                    {segment.text}
+                                  </Text>
+                                ))}
+                              </Text>
+                            </View>
+                          )
+                        }
                         return processed.isBold ? (
                           <View
                             key={item.key}
@@ -2799,7 +3179,7 @@ export function ReportPdf({
                               style={[styles.bulletPoint, styles.boldText]}
                               wrap
                             >
-                              • {processed.text}
+                              • {processed.text.replace(/\*\*/g, '')}
                             </Text>
                           </View>
                         ) : (
@@ -2809,7 +3189,7 @@ export function ReportPdf({
                             wrap={false}
                           >
                             <Text style={styles.bulletPoint} wrap>
-                              • {processed.text}
+                              • {processed.text.replace(/\*\*/g, '')}
                             </Text>
                           </View>
                         )
@@ -2861,6 +3241,32 @@ export function ReportPdf({
                         }
                       }
 
+                      // Regular text - handle inline bold
+                      if (processed.hasInlineBold) {
+                        const segments = parseInlineBold(processed.text)
+                        return (
+                          <View
+                            key={item.key}
+                            style={{ marginBottom: 8 }}
+                            wrap={false}
+                          >
+                            <Text style={styles.paragraph} wrap>
+                              {segments.map((segment, idx) => (
+                                <Text
+                                  key={idx}
+                                  style={
+                                    segment.bold
+                                      ? [styles.paragraph, styles.boldText]
+                                      : styles.paragraph
+                                  }
+                                >
+                                  {segment.text}
+                                </Text>
+                              ))}
+                            </Text>
+                          </View>
+                        )
+                      }
                       // Regular text - always use font weight 400
                       return (
                         <View
@@ -2869,7 +3275,7 @@ export function ReportPdf({
                           wrap={false}
                         >
                           <Text style={styles.paragraph} wrap>
-                            {processed.text}
+                            {processed.text.replace(/\*\*/g, '')}
                           </Text>
                         </View>
                       )
@@ -2886,7 +3292,10 @@ export function ReportPdf({
           <View style={styles.contentFooterDivider} />
           <View style={styles.contentFooterContent}>
             <Text style={styles.contentFooterText}>
-              AI Penetration Test Report {data.domain} -{' '}
+              {data.pentestType === 'aggressive'
+                ? 'AI Penetration Test Report'
+                : 'Vulnerability Scan Report'}{' '}
+              {data.domain} -{' '}
               {new Date().toLocaleDateString('en-GB', {
                 day: 'numeric',
                 month: 'long',

@@ -4,6 +4,7 @@ interface AISummaryRequest {
   files: DomainFile[]
   folderName: string
   pentestType: 'aggressive' | 'soft'
+  companyName?: string // Company name for appending at sentence ends (e.g., "onecom.com")
 }
 
 interface AISummaryResponse {
@@ -20,57 +21,197 @@ export async function generateExecutiveSummary(
   request: AISummaryRequest
 ): Promise<AISummaryResponse> {
   try {
-    // Combine all file contents with better formatting
-    const allContent = request.files
-      .map((file) => `=== ${file.path} ===\n${file.content}`)
+    // Intelligently process files - prioritize important content
+    // GPT-4o has ~128k token context (~500k+ characters)
+    // We'll use ~350k chars for content, leaving room for prompt (~120k chars) and response (~30k chars)
+    const maxContentLength = 350000
+    const maxFileSize = 80000 // Max size per individual file before sampling
+
+    // Sort files by importance (reports, summaries first, then logs)
+    const filePriority = (file: DomainFile): number => {
+      const path = file.path.toLowerCase()
+      if (
+        path.includes('report') ||
+        path.includes('summary') ||
+        path.includes('findings')
+      )
+        return 1
+      if (
+        path.includes('log') ||
+        path.includes('output') ||
+        path.includes('scan')
+      )
+        return 2
+      return 3
+    }
+
+    const sortedFiles = [...request.files].sort(
+      (a, b) => filePriority(a) - filePriority(b)
+    )
+
+    // Process files intelligently
+    const processedFiles: Array<{
+      path: string
+      content: string
+      wasTruncated: boolean
+    }> = []
+    let totalLength = 0
+
+    for (const file of sortedFiles) {
+      let fileContent = file.content
+      let wasTruncated = false
+
+      // If file is very large, intelligently sample it
+      if (fileContent.length > maxFileSize) {
+        console.log(
+          `📄 Large file detected: ${file.path} (${fileContent.length} chars) - sampling intelligently`
+        )
+
+        // Strategy: Keep first 40% (headers, important info), sample middle, keep last 30% (conclusions)
+        const firstPartSize = Math.floor(maxFileSize * 0.4)
+        const lastPartSize = Math.floor(maxFileSize * 0.3)
+        const middlePartSize = maxFileSize - firstPartSize - lastPartSize
+
+        const firstPart = fileContent.substring(0, firstPartSize)
+        const lastPart = fileContent.substring(
+          fileContent.length - lastPartSize
+        )
+
+        // Sample middle section more aggressively
+        const middleStart = firstPartSize
+        const middleEnd = fileContent.length - lastPartSize
+        const middleSection = fileContent.substring(middleStart, middleEnd)
+
+        // Extract key lines from middle (lines with keywords like "vulnerability", "finding", "critical", etc.)
+        const lines = middleSection.split('\n')
+        const importantKeywords = [
+          'vulnerability',
+          'finding',
+          'critical',
+          'high',
+          'medium',
+          'low',
+          'severity',
+          'cve',
+          'exploit',
+          'risk',
+          'issue',
+          'weakness',
+        ]
+        const importantLines: string[] = []
+        const otherLines: string[] = []
+
+        lines.forEach((line) => {
+          const lowerLine = line.toLowerCase()
+          if (
+            importantKeywords.some((keyword) => lowerLine.includes(keyword))
+          ) {
+            importantLines.push(line)
+          } else {
+            otherLines.push(line)
+          }
+        })
+
+        // Keep all important lines, sample other lines
+        const sampleRate = Math.max(
+          1,
+          Math.ceil(otherLines.length / (middlePartSize / 200))
+        ) // ~200 chars per line estimate
+        const sampledOtherLines = otherLines.filter(
+          (_, idx) => idx % sampleRate === 0
+        )
+        const sampledMiddle = [...importantLines, ...sampledOtherLines].join(
+          '\n'
+        )
+
+        // Ensure we don't exceed maxFileSize
+        if (sampledMiddle.length > middlePartSize) {
+          const finalMiddle = sampledMiddle.substring(0, middlePartSize)
+          fileContent = `${firstPart}\n\n... [Middle section sampled - showing important lines and every ${sampleRate} other lines] ...\n\n${finalMiddle}\n\n... [Content continues] ...\n\n${lastPart}`
+        } else {
+          fileContent = `${firstPart}\n\n... [Middle section sampled - showing important lines and every ${sampleRate} other lines] ...\n\n${sampledMiddle}\n\n... [Content continues] ...\n\n${lastPart}`
+        }
+
+        wasTruncated = true
+
+        console.log(
+          `   ✓ Sampled to ${fileContent.length} chars (${Math.round(
+            (fileContent.length / file.content.length) * 100
+          )}% of original)`
+        )
+        console.log(
+          `   ✓ Preserved ${importantLines.length} important lines from middle section`
+        )
+      }
+
+      const fileHeader = `=== ${file.path} ===`
+      const fileWithHeader = `${fileHeader}\n${fileContent}`
+      const estimatedLength = totalLength + fileWithHeader.length + 2 // +2 for \n\n
+
+      // If adding this file would exceed limit, stop
+      if (estimatedLength > maxContentLength && processedFiles.length > 0) {
+        console.warn(
+          `⚠ Reached content limit. Processed ${processedFiles.length} of ${sortedFiles.length} files.`
+        )
+        console.warn(
+          `   Total content: ${totalLength} chars (limit: ${maxContentLength} chars)`
+        )
+        break
+      }
+
+      processedFiles.push({
+        path: file.path,
+        content: fileContent,
+        wasTruncated,
+      })
+      totalLength = estimatedLength
+    }
+
+    // Combine processed files
+    const contentToSend = processedFiles
+      .map(
+        (file) =>
+          `=== ${file.path}${file.wasTruncated ? ' [SAMPLED]' : ''} ===\n${
+            file.content
+          }`
+      )
       .join('\n\n')
+
+    // Log processing summary
     request.files.forEach((file, idx) => {
       console.log(`\nFile ${idx + 1}: ${file.path}`)
       console.log(`  Type: ${file.type}`)
       console.log(`  Content length: ${file.content.length} characters`)
-      console.log(`  Content preview (first 300 chars):`)
-      console.log(
-        '  ' +
-          file.content
-            .substring(0, 300)
-            .split('\n')
-            .map((line, i) => (i === 0 ? '  ' : '  ') + line)
-            .join('\n')
-      )
-      if (file.content.length > 300) {
-        console.log('  ... [content continues] ...')
-        console.log(`  Content ending (last 200 chars):`)
-        console.log(
-          '  ' +
-            file.content
-              .substring(file.content.length - 200)
-              .split('\n')
-              .map((line, i) => (i === 0 ? '  ' : '  ') + line)
-              .join('\n')
-        )
+      const processed = processedFiles.find((f) => f.path === file.path)
+      if (processed?.wasTruncated) {
+        console.log(`  ⚠ File was sampled/truncated for processing`)
       }
     })
 
-    // GPT-4o has ~128k token context (~500k+ characters)
-    // Limit content to ~300k chars to leave room for prompt (~200k chars) and response (~80k chars)
-    // This ensures we stay within the 128k token limit
-    const maxContentLength = 300000
-    let contentToSend = allContent
-
-    if (allContent.length > maxContentLength) {
+    console.log(`\n✓ Content processing complete:`)
+    console.log(`   - Total files: ${request.files.length}`)
+    console.log(`   - Files processed: ${processedFiles.length}`)
+    console.log(`   - Total content length: ${contentToSend.length} characters`)
+    console.log(`   - Content limit: ${maxContentLength} characters`)
+    if (contentToSend.length > maxContentLength * 0.9) {
       console.warn(
-        `⚠ Content is very large (${allContent.length} chars), truncating to ${maxContentLength} chars`
+        `   ⚠ Content is near limit (${Math.round(
+          (contentToSend.length / maxContentLength) * 100
+        )}%)`
       )
+    }
+    if (processedFiles.some((f) => f.wasTruncated)) {
+      const truncatedCount = processedFiles.filter((f) => f.wasTruncated).length
       console.warn(
-        'Consider breaking into multiple requests for extremely large datasets'
+        `   ⚠ ${truncatedCount} file(s) were sampled/truncated due to size`
       )
-      contentToSend =
-        allContent.substring(0, maxContentLength) +
-        '\n\n... [Content truncated due to size - first ' +
-        maxContentLength +
-        ' characters sent] ...'
-    } else {
-      console.log('✓ All content will be sent to AI (no truncation needed)')
+    }
+    if (processedFiles.length < request.files.length) {
+      console.warn(
+        `   ⚠ ${
+          request.files.length - processedFiles.length
+        } file(s) were skipped due to content limit`
+      )
     }
 
     // Get today's date for replacement in content
@@ -90,117 +231,320 @@ export async function generateExecutiveSummary(
     const pentestTypeDescription =
       request.pentestType === 'aggressive'
         ? 'A comprehensive aggressive penetration test was conducted'
-        : 'A comprehensive soft penetration test was conducted'
+        : 'A non-intrusive external vulnerability scan was conducted'
 
     const pentestTypeContext =
       request.pentestType === 'aggressive'
         ? 'This aggressive testing approach simulated real-world attack scenarios with extensive vulnerability exploitation and system stress testing to identify all potential security weaknesses. The testing methodology was thorough and intensive, actively attempting to exploit discovered vulnerabilities to demonstrate real-world impact.'
-        : 'This soft testing approach focused on non-intrusive vulnerability assessment and security posture evaluation, carefully identifying security issues without actively exploiting vulnerabilities or disrupting business operations. The testing methodology prioritised safety and minimal business impact whilst still providing comprehensive security findings.'
+        : 'This vulnerability scan is a non-intrusive, consent-based external assessment designed to identify potential security hygiene issues. The scan focuses on publicly accessible systems, configurations, and software versions without attempting exploitation or disrupting live systems. This assessment provides early visibility of potential external security exposures and is suitable for regular monitoring and early risk awareness.'
+
+    // Company name for appending at sentence ends
+    const companyName = request.companyName || ''
+    const companyNameSuffix = companyName ? ` ${companyName}` : ''
 
     // Extract domain name from folder name
     const domainName = request.folderName || 'the client'
 
-    // Aggressive mode specific instructions
+    // Extract severity counts from content for dynamic prompt
+    const extractSeverityCounts = (content: string) => {
+      const contentLower = content.toLowerCase()
+      let critical = 0,
+        high = 0,
+        medium = 0,
+        low = 0
+
+      // Count severity mentions
+      critical = (contentLower.match(/\*\*severity:\*\*\s*critical/gi) || [])
+        .length
+      high = (contentLower.match(/\*\*severity:\*\*\s*high/gi) || []).length
+      medium = (contentLower.match(/\*\*severity:\*\*\s*medium/gi) || []).length
+      low = (contentLower.match(/\*\*severity:\*\*\s*low/gi) || []).length
+
+      // Also check for table formats
+      const tableMatch = content.match(/\|.*severity.*\|.*count.*\|/gi)
+      if (tableMatch) {
+        const lines = content.split('\n')
+        for (const line of lines) {
+          const lowerLine = line.toLowerCase()
+          if (lowerLine.includes('critical') && line.match(/\|\s*(\d+)\s*\|/)) {
+            const match = line.match(/\|\s*(\d+)\s*\|/)
+            if (match && match[1])
+              critical = Math.max(critical, parseInt(match[1], 10))
+          } else if (
+            lowerLine.includes('high') &&
+            !lowerLine.includes('medium') &&
+            line.match(/\|\s*(\d+)\s*\|/)
+          ) {
+            const match = line.match(/\|\s*(\d+)\s*\|/)
+            if (match && match[1]) high = Math.max(high, parseInt(match[1], 10))
+          } else if (
+            lowerLine.includes('medium') &&
+            line.match(/\|\s*(\d+)\s*\|/)
+          ) {
+            const match = line.match(/\|\s*(\d+)\s*\|/)
+            if (match && match[1])
+              medium = Math.max(medium, parseInt(match[1], 10))
+          } else if (
+            lowerLine.includes('low') &&
+            line.match(/\|\s*(\d+)\s*\|/)
+          ) {
+            const match = line.match(/\|\s*(\d+)\s*\|/)
+            if (match && match[1]) low = Math.max(low, parseInt(match[1], 10))
+          }
+        }
+      }
+
+      return { critical, high, medium, low }
+    }
+
+    const severityProfile = extractSeverityCounts(contentToSend)
+    const totalFindings =
+      severityProfile.critical +
+      severityProfile.high +
+      severityProfile.medium +
+      severityProfile.low
+
+    // Aggressive mode specific instructions - DYNAMIC SEVERITY-DRIVEN PROMPT
     const aggressiveModeInstructions =
       request.pentestType === 'aggressive'
         ? `
-CRITICAL AGGRESSIVE MODE REQUIREMENTS - MAXIMUM DETAIL AND VALUE:
+🚨 CRITICAL: AGGRESSIVE PENETRATION TEST MODE - FUNDAMENTALLY DIFFERENT FROM SOFT SCANS
 
-1. MULTI-IP DOMAIN TESTING - COMPREHENSIVE DOCUMENTATION:
-   - CRITICAL: The uploaded folder contains penetration test data from MULTIPLE DIFFERENT IP ADDRESSES all belonging to the SAME DOMAIN
-   - Each IP address represents a COMPLETELY SEPARATE and DISTINCT attack surface with unique vulnerabilities, services, configurations, and security postures
-   - You MUST treat each IP address as if it were a separate infrastructure assessment
-   - Document findings for EACH IP address individually with EXTENSIVE detail and clear separation
-   - Create dedicated sections or subsections for each IP address when multiple IPs are present
-   - Show the attack surface diversity - explain how different IPs expose different vulnerabilities
-   - Compare and contrast findings across IPs - highlight which IPs are more vulnerable and why
-   - Document the relationship between IPs - explain potential attack paths between different IPs
-   - For each IP, provide: IP address, open ports, running services, discovered vulnerabilities, exploitation results, and remediation recommendations
+SYSTEM ROLE: You are a Principal Red Team Architect creating long-form enterprise penetration testing reports used by banks, SaaS providers, VPN companies, and regulated industries. You NEVER speculate, never mention AI, and write as if testing was ACTUALLY performed through ACTIVE EXPLOITATION.
 
-2. HIGHLY DESCRIPTIVE, VERBOSE, PROFESSIONAL WRITE-UPS - MAXIMUM EXPLANATORY DEPTH:
-   - Provide EXTREMELY EXTENSIVE technical explanations for every vulnerability discovered - aim for 3-5 paragraphs per finding minimum
-   - Include DETAILED exploitability analysis with comprehensive step-by-step exploitation logic
-   - Document proof-of-concept descriptions with FULL technical evidence where vulnerabilities were validated
-   - Explain attack paths in EXTREME DETAIL - show the complete attack chain from initial access to potential lateral movement
-   - Include CVE references (where applicable) with detailed descriptions, CVSS scores, and exploitation complexity
-   - Provide comprehensive impact assessments with BOTH business and technical perspectives - be thorough
-   - Include risk scoring using industry-standard frameworks (CVSS v3.1, OWASP Risk Rating, DREAD)
-   - Document recommended remediation steps with DETAILED implementation guidance, code examples, configuration changes
-   - Explain WHY each vulnerability exists - root cause analysis
-   - Explain HOW each vulnerability was discovered and validated - methodology
-   - Explain WHAT an attacker could do - realistic attack scenarios
-   - Explain WHEN this should be fixed - urgency and priority justification
+⚠️ MANDATORY DIFFERENTIATION FROM SOFT MODE:
+- This is NOT a vulnerability scan - this is an AGGRESSIVE PENETRATION TEST
+- Content MUST be fundamentally different in tone, depth, and technical detail
+- EVERY finding MUST include actual exploitation commands and evidence
+- Content must be EXTREMELY descriptive - aim for 5-8 paragraphs per finding minimum
+- Show REAL attack scenarios, not theoretical vulnerabilities
+- Demonstrate ACTIVE exploitation, not passive scanning
 
-3. NO WORD LIMIT - BE EXTREMELY COMPREHENSIVE AND BEEFY:
-   - There is ABSOLUTELY NO capping on content words limit - generate as much as needed
-   - Generate EXTENSIVE detailed content to provide MAXIMUM value to customers
-   - Expand findings THOROUGHLY - aim for 10000-15000+ words for aggressive mode reports with multiple IPs
-   - Make the report appear SUBSTANTIAL, VALUABLE, and INSIGHTFUL for stakeholders
-   - Each finding should be a COMPREHENSIVE write-up (3-5 paragraphs minimum), not a brief summary
-   - Fill every section completely - no empty spaces, no brief explanations
-   - Provide context, background, technical details, examples, and extensive analysis for EVERY finding
-   - The report should feel like a premium, high-value security assessment document
+SEVERITY PROFILE DETECTED FROM DATA:
+- Critical: ${severityProfile.critical} findings
+- High: ${severityProfile.high} findings  
+- Medium: ${severityProfile.medium} findings
+- Low: ${severityProfile.low} findings
+- Total: ${totalFindings} findings
 
-4. TECHNICAL DEPTH AND AUTHORITY - EXPERT-LEVEL DETAIL:
-   - Use formal cybersecurity language extensively aligned with industry standards:
-     * OWASP Testing Guide and Top 10 (reference specific categories)
-     * MITRE ATT&CK framework references (map to specific techniques)
-     * NIST Cybersecurity Framework (align with specific controls)
-     * PTES (Penetration Testing Execution Standard) methodology
-     * CWE (Common Weakness Enumeration) classifications
-     * CVSS (Common Vulnerability Scoring System) detailed scoring
-   - Explain HOW vulnerabilities were validated through active exploitation - show the process
-   - Document exploitation logic in DETAIL - step-by-step attack procedures
-   - Document attack vectors and attack chains COMPREHENSIVELY
-   - Describe potential lateral movement opportunities between systems and IPs in detail
-   - Include technical evidence, command outputs, proof-of-concept code, screenshots descriptions where relevant
-   - Explain network topology implications - how findings relate to overall infrastructure
-   - Document service versions, configurations, and technical specifics for each IP
+🎚️ SEVERITY-DRIVEN CONTENT ALLOCATION:
 
-5. STRUCTURE FOR MAXIMUM VALUE - COMPREHENSIVE SECTIONS:
-   - CRITICAL: The report MUST contain AT LEAST 25 SECTIONS total (main sections + subsections). This is mandatory.
-   - Create comprehensive sections: Executive Summary with 5+ subsections, Test Scope with 5+ subsections, Attack Surface Analysis with 4+ subsections, Detailed Findings with each finding as a separate subsection, Risk Assessment with 4+ subsections, Recommendations with 4+ subsections, Appendices with 4+ subsections
-   - For multi-IP scenarios: Create dedicated IP-specific sections (e.g., "IP Address 192.168.1.1 Analysis", "IP Address 192.168.1.2 Analysis", etc.)
-   - Create vulnerability category sections (e.g., "Authentication Vulnerabilities", "Authorization Flaws", "Injection Vulnerabilities", "Configuration Issues", etc.)
-   - Create compliance mapping sections (e.g., "OWASP Top 10 Mapping", "NIST Framework Alignment", "ISO 27001 Compliance Gaps", etc.)
-   - Executive Summary: EXTENSIVE comprehensive risk overview (2-3 pages) with detailed findings summary, IP-by-IP risk breakdown, with 5+ subsections
-   - Risk Overview: DETAILED risk matrix with scoring, prioritization, and IP-specific risk distribution
-   - Remediation Priority Matrix: COMPREHENSIVE prioritization with timelines, resource requirements, and IP-specific remediation plans
-   - Detailed Findings: Each finding should be 3-5 paragraphs minimum with:
-     * EXTENSIVE technical description (2-3 paragraphs)
-     * DETAILED exploitation methodology (step-by-step, comprehensive)
-     * COMPLETE proof of concept (with code, commands, evidence)
-     * THOROUGH impact analysis (business + technical, multiple perspectives)
-     * DETAILED attack path visualization (complete attack chain)
-     * COMPREHENSIVE remediation steps with implementation details (code examples, configs)
-     * CVE references and CVSS scores with detailed explanations
-     * IP address identification and attack surface analysis
+${
+  severityProfile.critical > 0
+    ? `🔴 CRITICAL SEVERITY BEHAVIOR (${severityProfile.critical} findings - 35-40% of report):
+- Expand EACH critical finding into MULTI-PAGE deep dives (4-6 pages per finding)
+- Include FULL attack chains showing complete breach narratives
+- Add "If exploited today" scenarios with realistic timelines
+- Executive risk language with board-level warnings
+- Immediate remediation timelines (hours/days, not weeks)
+- Document complete exploitation methodology with step-by-step procedures
+- Include ALL commands, outputs, and evidence in code blocks with black terminal-style background
+- Show complete attack path from initial access to data exfiltration
+- Business impact: Financial loss, regulatory fines, reputation damage
+- Technical impact: Complete system compromise, lateral movement, data breach`
+    : '- No critical findings detected - focus on preventive maturity'
+}
 
-6. IP-SPECIFIC DOCUMENTATION - SEPARATE ATTACK SURFACES:
-   - When multiple IPs are present, structure findings CLEARLY by IP address
-   - Create sections like "Findings for IP [address]" or "Attack Surface Analysis: IP [address]"
-   - Show how different IPs have DIFFERENT attack surfaces - compare and contrast
-   - Document IP-specific vulnerabilities SEPARATELY with full detail for each
-   - Explain the relationship between IPs - document potential attack paths between different IPs
-   - For each IP, provide: complete port scan results, service enumeration, vulnerability assessment, exploitation results
-   - Show which IPs are more critical, which have more vulnerabilities, and why
-   - Document network relationships - how compromising one IP could lead to others
+${
+  severityProfile.high > 0
+    ? `🟠 HIGH SEVERITY BEHAVIOR (${severityProfile.high} findings - 30-35% of report):
+- Detailed technical exploitation with code-level fixes
+- Strong education on architectural improvements
+- Document exploitation steps with ALL commands in code blocks
+- Show how high-severity issues can escalate to critical
+- Include remediation with code examples and configuration changes
+- Explain attack vectors and exploitation prerequisites`
+    : '- No high findings detected'
+}
 
-7. TONE AND STYLE - AUTHORITATIVE AND DETAILED:
-   - Authoritative, expert-level, highly technical - write like a senior penetration tester
-   - Suitable for aggressive security testing documentation
-   - Professional but EXTREMELY detailed for technical stakeholders
-   - Balance technical depth with business impact explanations
-   - Use technical terminology confidently - explain complex concepts thoroughly
-   - Show expertise through detailed analysis and comprehensive documentation
+${
+  severityProfile.medium > 0
+    ? `🟡 MEDIUM SEVERITY BEHAVIOR (${severityProfile.medium} findings - 15-20% of report):
+- Educational focus on prevention patterns
+- Explain why medium issues often escalate into high/critical
+- Group similar findings for efficiency
+- Show hardening recommendations`
+    : '- No medium findings detected'
+}
 
-8. VALUE DELIVERY - CUSTOMER-FOCUSED:
-   - The customer is paying for a comprehensive assessment - deliver MAXIMUM value
-   - Make every section substantial and informative
-   - Provide actionable, detailed recommendations
-   - Show thoroughness and expertise in every finding
-   - Demonstrate that the assessment was comprehensive and valuable
-   - The report should justify the investment through extensive detail and insights
+${
+  severityProfile.low > 0
+    ? `🟢 LOW SEVERITY BEHAVIOR (${severityProfile.low} findings - 5-10% of report):
+- Group similar findings together
+- Explain hygiene and best practices
+- Keep concise but informative
+- Focus on preventive measures`
+    : '- No low findings detected'
+}
+
+🚨 MANDATORY COMMAND REQUIREMENTS - NON-NEGOTIABLE:
+- EVERY SINGLE FINDING in aggressive mode MUST include actual exploitation commands
+- Commands are NOT optional - they are MANDATORY for every vulnerability documented
+- If commands exist in the data, they MUST be included - NO EXCEPTIONS
+- If commands don't exist in the data, you MUST describe what commands WOULD be used to exploit this
+- CRITICAL FORMATTING: ALL commands MUST be wrapped in triple backticks on separate lines
+- The EXACT format you MUST use is: Start with a line containing only three backticks, then the command and output, then end with a line containing only three backticks
+- Example format:
+  [Line 1: Three backticks]
+  [Line 2: (kali@kali) $ smbclient //[TARGET]/SHARE -U '' -L '' -N -c 'ls']
+  [Line 3: Sharename       Type      Comment]
+  [Line 4: ---------       ----      ------]
+  [Line 5: ACCOUNTING      Disk      ]
+  [Line 6: IPC$            IPC       IPC Service]
+  [Line 7: Three backticks]
+- DO NOT use inline code, DO NOT use single backticks, DO NOT skip the code block formatting
+- The triple backticks MUST be on their own separate lines
+- Include COMPLETE command outputs exactly as they appear in the data
+- Show terminal-style formatting with full command execution context
+- Examples of commands that MUST be included:
+  - smbclient commands for SMB enumeration (with full output)
+  - nmap scans with complete port scan results
+  - rpcclient commands for user enumeration (with full output)
+  - sqlmap injection commands and results
+  - burp suite exploitation steps
+  - metasploit module execution
+  - Any exploitation commands and their COMPLETE outputs
+- This demonstrates REAL aggressive pen testing - actual exploitation, not scanning
+- Include ALL command outputs, directory listings, scan results, file contents, and evidence
+- Make it crystal clear these are ACTUAL exploitation commands that were executed during testing
+- For each finding, show: the command used, the output received, and what it means
+- REMEMBER: Code blocks with triple backticks create a premium black background in the PDF - this is essential for the professional look
+
+MULTI-IP DOMAIN TESTING - COMPREHENSIVE DOCUMENTATION:
+- CRITICAL: The uploaded folder contains penetration test data from MULTIPLE DIFFERENT IP ADDRESSES all belonging to the SAME DOMAIN
+- Each IP address represents a COMPLETELY SEPARATE and DISTINCT attack surface
+- Document findings for EACH IP address individually with EXTENSIVE detail
+- Create dedicated sections for each IP: "IP Address [X.X.X.X] Analysis"
+- Show attack surface diversity - explain how different IPs expose different vulnerabilities
+- Document potential attack paths between different IPs
+- For each IP, provide: complete port scan results, service enumeration, vulnerability assessment, exploitation results
+
+REPORT STRUCTURE REQUIREMENTS (14-15 pages minimum):
+1. Executive Summary (2-3 pages):
+   ${
+     severityProfile.critical > 0
+       ? '- Board-level warning section with breach scenarios'
+       : '- Risk overview'
+   }
+   - Severity distribution analysis with detailed breakdown
+   - IP-by-IP risk breakdown (if multiple IPs) with attack surface comparison
+   - Key findings summary with exploitation evidence highlights
+   - Immediate action items with urgency justification
+
+2. Test Scope & Methodology (1-2 pages):
+   - Testing approach explanation emphasizing ACTIVE EXPLOITATION
+   - Tools and techniques used with specific command examples
+   - IP addresses tested with port scan summaries
+   - Testing timeline with exploitation phases
+   - Methodology differences from passive scanning
+
+3. Attack Surface Analysis (2-3 pages):
+   - IP-by-IP analysis with port scan results in tables
+   - Service enumeration with version information
+   - Network topology implications with attack paths
+   - Initial access vectors identified
+   - Lateral movement opportunities
+
+4. Detailed Findings (6-10 pages - THIS IS WHERE COMMANDS ARE MANDATORY):
+   ${
+     severityProfile.critical > 0
+       ? `- Each CRITICAL finding: 6-10 paragraphs MINIMUM with:
+     * Full attack chain from initial access to data exfiltration
+     * MANDATORY: Complete exploitation commands in code blocks
+     * MANDATORY: Full command outputs showing successful exploitation
+     * Detailed step-by-step exploitation methodology
+     * Business impact with financial/regulatory consequences
+     * Technical impact with system compromise details
+     * Remediation with code examples and configuration changes`
+       : ''
+   }
+   ${
+     severityProfile.high > 0
+       ? `- Each HIGH finding: 5-8 paragraphs MINIMUM with:
+     * Detailed exploitation methodology
+     * MANDATORY: Exploitation commands in code blocks
+     * MANDATORY: Command outputs showing validation
+     * Attack vector explanation
+     * Business and technical impact
+     * Detailed remediation steps`
+       : ''
+   }
+   ${
+     severityProfile.medium > 0
+       ? `- MEDIUM findings: 3-5 paragraphs each with:
+     * Prevention-focused education
+     * MANDATORY: Commands that would exploit this (if not in data, describe them)
+     * Escalation risk explanation
+     * Hardening recommendations`
+       : ''
+   }
+   ${
+     severityProfile.low > 0
+       ? `- LOW findings: 2-3 paragraphs grouped together with:
+     * Hygiene recommendations
+     * Best practices
+     * Preventive measures`
+       : ''
+   }
+   - CRITICAL: For EVERY finding, you MUST include:
+     * MANDATORY: Actual exploitation commands in code blocks (if in data) OR description of commands that would be used
+     * MANDATORY: Complete command outputs (if available) showing what happened
+     * Detailed exploitation methodology with step-by-step procedures
+     * Full attack chain visualization showing the complete path
+     * Business impact with specific consequences
+     * Technical impact with system-level details
+     * Detailed remediation with code examples, configuration changes, and implementation steps
+     * CVE references with CVSS scores and exploitation complexity
+     * Proof of concept evidence
+
+5. Risk Assessment (1-2 pages):
+   - Risk matrix with severity-based scoring and CVSS calculations
+   - Attack chain analysis showing how vulnerabilities chain together
+   - Maturity score assessment with industry benchmarks
+   - Exploitation likelihood based on actual testing
+
+6. Remediation Roadmap (1-2 pages):
+   ${
+     severityProfile.critical > 0
+       ? '- Extremely detailed with immediate timelines (hours/days)'
+       : '- Detailed with priority-based timelines'
+   }
+   - IP-specific remediation plans with command examples
+   - Resource requirements with implementation effort
+   - Verification steps with testing commands
+
+7. Appendices (1-2 pages):
+   - Technical references with CVE details
+   - Framework mappings (OWASP, MITRE ATT&CK, NIST)
+   - Glossary of technical terms
+   - Command reference guide
+
+WRITING RULES (ENFORCED FOR AGGRESSIVE MODE):
+- Enterprise tone - authoritative, expert-level, technical depth
+- EXTREMELY descriptive - every finding must be 5-10 paragraphs minimum
+- Educational depth - explain WHY vulnerabilities exist, HOW they were exploited, WHAT the impact is
+- Show REAL attack scenarios with actual exploitation evidence
+- No filler - but be THOROUGHLY descriptive and detailed
+- No emojis in content (only in this prompt)
+- Tables where useful for structured data (port scans, service enumeration, etc.)
+- Markdown formatting, PDF-ready
+- MANDATORY: Show REAL aggressive pen testing through ACTUAL commands and evidence
+- Make it crystal clear this was an ACTIVE EXPLOITATION test, not passive scanning
+- Use technical terminology confidently - this is for technical stakeholders
+- Describe attack chains in detail - show the complete path from initial access to compromise
+- Include exploitation timelines and realistic attack scenarios
+
+OUTPUT REQUIREMENTS FOR AGGRESSIVE MODE:
+- 14-15 pages minimum when exported to PDF
+- 10,000-15,000+ words with extensive detail
+- Clean headings with proper hierarchy
+- Consistent structure throughout
+- Executive + technical balance (more technical than soft mode)
+- MANDATORY: ALL commands and evidence properly formatted in code blocks
+- MANDATORY: Every finding must include exploitation commands or command descriptions
+- Show what aggressive pen testing REALLY looks like through actual commands and outputs
+- Content must be SUBSTANTIALLY more detailed than soft mode reports
+- Each finding section should be 2-3 pages minimum for critical/high findings
 
 `
         : ''
@@ -214,12 +558,12 @@ CRITICAL AGGRESSIVE MODE REQUIREMENTS - MAXIMUM DETAIL AND VALUE:
     const severityFormat =
       request.pentestType === 'aggressive'
         ? '**Severity:** [Critical/High/Medium/Low in Title Case] with CVSS score if applicable'
-        : '**Severity:** [Critical/High/Medium/Low in Title Case]'
+        : '**Observation:** [High/Medium/Low in Title Case] - Use "Observation" instead of "Severity" for vulnerability scans. This indicates a potential exposure level that warrants review, not a confirmed exploitable vulnerability.'
 
     const descriptionFormat =
       request.pentestType === 'aggressive'
-        ? '**Description:** [VERY DETAILED explanation - at least 5-7 sentences with extensive technical detail explaining the security issue, how it works, why it exists, and the technical implications. Include CVE references, CVSS scores, and industry-standard classifications.]'
-        : '**Description:** [VERY DETAILED explanation - at least 3-4 sentences explaining the security issue in business terms, what it means for the organisation, why it is a concern]'
+        ? '**Description:** [EXTREMELY DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) with extensive technical detail explaining the security issue, how it works, why it exists, and the technical implications. Include CVE references, CVSS scores, and industry-standard classifications. Describe the vulnerability in depth, explain the root cause, and provide context about how this type of vulnerability is typically exploited in real-world attacks.]'
+        : '**Description:** [EXTENSIVE, DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) explaining the security observation in business terms. This must be substantial content that provides real value. CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS: DO NOT use phrases like "allows unauthenticated remote code execution", "attacker could gain full control", "immediate risk", "system is at risk of total compromise". Instead, use language like: "A version associated with [CVE number] was observed", "Exploitability depends on runtime configuration", "Warrants validation", "May increase exposure if left unreviewed". Frame as potential exposure that warrants review, not confirmed exploitable vulnerability. Include detailed context about what was observed, why it matters, and what it means for the organization.]'
 
     const technicalDetailsSection =
       request.pentestType === 'aggressive'
@@ -228,8 +572,8 @@ CRITICAL AGGRESSIVE MODE REQUIREMENTS - MAXIMUM DETAIL AND VALUE:
 
     const whatWasFoundFormat =
       request.pentestType === 'aggressive'
-        ? '**What Was Found:** [EXTENSIVE technical explanation with detailed evidence, proof-of-concept results, and validation outcomes. Include specific IP addresses, ports, services, and configurations affected.]'
-        : '**What Was Found:** [Clear explanation of the security issue without technical jargon - use business-friendly descriptions]'
+        ? '**What Was Found:** [EXTENSIVE technical explanation (2-3 paragraphs minimum) with detailed evidence, proof-of-concept results, and validation outcomes. Include specific IP addresses, ports, services, and configurations affected. Describe exactly what was discovered during testing, including all technical details, service versions, configurations, and any other relevant information. Show the complete picture of what was found.]'
+        : '**What Was Found:** [EXTENSIVE, DETAILED explanation (2-3 paragraphs minimum, 8-12 sentences) of the security observation without technical jargon - use business-friendly descriptions. Include specific details about what was observed, where it was found, and what it indicates. Provide comprehensive context about the finding, its implications, and why it warrants attention. This must be substantial content that provides real value to the reader.]'
 
     const affectedSystemsFormat =
       request.pentestType === 'aggressive'
@@ -244,26 +588,52 @@ CRITICAL AGGRESSIVE MODE REQUIREMENTS - MAXIMUM DETAIL AND VALUE:
     const riskScenarioFormat =
       request.pentestType === 'aggressive'
         ? '**Risk Scenario:** [Explain the business risk - what could happen if this is not fixed, including potential attack chains and lateral movement paths. INCLUDE URGENCY: Add factual statements about how quickly such vulnerabilities are discovered and exploited, e.g., "These issues are routinely exploited by automated scanners within days of exposure."]'
-        : '**Risk Scenario:** [Explain the business risk - what could happen if this is not fixed, in terms customers understand. INCLUDE URGENCY: Add factual statements about exploitation timelines, such as "These vulnerabilities are routinely discovered and exploited within [timeframe]." Create urgency without fear-mongering.]'
+        : '**Risk Scenario:** [For vulnerability scans: Frame this as potential risk if left unreviewed, not confirmed exploitable. CRITICAL LANGUAGE REQUIREMENTS: DO NOT use phrases like "severe risk", "business continuity", "data breaches", "complete system compromise", "attacker could", "could lead to". Instead, use conditional, future-looking language like: "If left unreviewed, externally visible misconfigurations and outdated services may increase the likelihood of security incidents over time", "May warrant review to assess real-world risk", "May increase exposure if configuration issues are not addressed". Frame as visibility over time, not increasing risk. Create awareness without fear-mongering.]'
 
     const howToExploitFormat =
       request.pentestType === 'aggressive'
-        ? '**How to exploit:** [For AGGRESSIVE mode: Include DETAILED exploitation methodology with step-by-step attack procedures, command sequences, proof-of-concept code, and complete attack chain documentation. Show how the vulnerability was actively exploited during testing. Document the full attack path from initial access to potential lateral movement. CRITICAL: Format ALL commands and their outputs as code blocks using triple backticks. Include the complete command output exactly as it appears in the data.]'
+        ? "**How to exploit:** [MANDATORY SECTION - This is CRITICAL for aggressive mode. Include EXTREMELY DETAILED exploitation methodology (3-4 paragraphs minimum) with step-by-step attack procedures, command sequences, proof-of-concept code, and complete attack chain documentation. Show how the vulnerability was actively exploited during testing. Document the full attack path from initial access to potential lateral movement. MANDATORY: You MUST include actual exploitation commands in code blocks using triple backticks. The EXACT format is: Start with a line containing only ``` (three backticks), then the command and output on separate lines, then end with a line containing only ``` (three backticks). Example:\n\n```\n(kali@kali) $ smbclient //[TARGET]/SHARE -U '' -L '' -N -c 'ls'\nSharename       Type      Comment\n---------       ----      ------\nACCOUNTING      Disk      \nIPC$            IPC       IPC Service\n```\n\nIf commands exist in the data, include them with COMPLETE outputs in this exact format. If commands don't exist, describe in detail what commands would be used to exploit this vulnerability and format them the same way. Show REAL aggressive pen testing commands like smbclient, nmap, rpcclient, sqlmap, metasploit, etc. Include the complete command output exactly as it appears in the data with terminal-style formatting. This demonstrates what REAL aggressive penetration testing looks like - actual exploitation commands that were executed, not just scanning. Be EXTREMELY descriptive - explain each step of the exploitation process in detail. The code blocks will render with a premium black background in the PDF.]"
         : '**How to exploit:** [If exploit steps are available in the data, present them in a clear, numbered format. For any commands or code, enclose them in code blocks using triple backticks for proper formatting with background highlighting. CRITICAL: Include the complete command output exactly as it appears in the source data - do not summarize or omit any details.]'
 
     // Prepare the prompt - detailed report
-    const promptBase = `You are a senior cybersecurity consultant creating a professional penetration test report for CUSTOMERS and BUSINESS EXECUTIVES. This report will be read by non-technical stakeholders, C-level executives, and business decision-makers.
+    const reportTypeLabel =
+      request.pentestType === 'aggressive'
+        ? 'penetration test report'
+        : 'vulnerability scan report'
+
+    const promptBase = `You are a senior cybersecurity consultant creating a professional ${reportTypeLabel} for CUSTOMERS and BUSINESS EXECUTIVES. This report will be read by non-technical stakeholders, C-level executives, and business decision-makers.
 
 CRITICAL COMPANY/DOMAIN NAME REQUIREMENT:
 - The domain being tested is: ${domainName}
 - When referring to the client or company, use the domain name "${domainName}" or refer to them as "the client" or "the organization"
-- DO NOT use any hardcoded company names like "Onecom" unless that is actually the domain being tested
+${
+  companyName
+    ? `- At the end of key sentences throughout the report, append "${companyName}" naturally (e.g., "This scan provides early visibility of potential external security exposures${companyNameSuffix}.")`
+    : ''
+}
 - Use the actual domain name "${domainName}" throughout the report when referring to the tested infrastructure
 
-CRITICAL PENETRATION TEST TYPE:
-${pentestTypeDescription}. ${pentestTypeContext}
+CRITICAL REPORT TYPE DIFFERENTIATION:
+${
+  request.pentestType === 'aggressive'
+    ? `This is an AGGRESSIVE PENETRATION TEST REPORT. ${pentestTypeDescription}. ${pentestTypeContext}. You MUST clearly indicate in the Executive Summary and Test Scope sections that this was an AGGRESSIVE penetration test. Explain what this means for the testing approach and findings.`
+    : `This is a VULNERABILITY SCAN REPORT, NOT a penetration test. ${pentestTypeDescription}. ${pentestTypeContext}. You MUST clearly indicate throughout the report that this is a non-intrusive external vulnerability scan, not an exploitative penetration test. 
 
-You MUST clearly indicate in the Executive Summary and Test Scope sections that this was a ${request.pentestType.toUpperCase()} penetration test. Explain what this means for the testing approach and findings.
+CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS:
+1. Use "Observation" instead of "Severity" - this indicates potential exposure level that warrants review, not confirmed exploitable vulnerability
+2. DO NOT use phrases like "allows unauthenticated remote code execution", "attacker could gain full control", "immediate risk", "system is at risk of total compromise", "severe risk", "business continuity", "data breaches", "could lead to", "may lead to unauthorised access and data breaches", "could result in breaches", "will lead to", "causes regulatory issues"
+3. For CVEs (especially OpenSSH CVE-2024-6387): State that a version associated with the CVE was observed, explicitly say exploitability depends on runtime config, use "Warrants validation" not "System is at risk"
+4. For Database Exposure Findings (MySQL/PostgreSQL/etc): DO NOT say "may lead to unauthorised access and data breaches". DO say "increases the likelihood of unauthorised access attempts if additional controls are not in place". Preserve urgency without triggering panic.
+5. Use conditional, forward-looking, non-absolute language: "If left unreviewed, may increase exposure over time", "May warrant review to assess potential impact", "Could potentially affect operations if not addressed", "may increase risk over time if left unreviewed", "could contribute to elevated risk exposure", "represents an area for security posture improvement"
+6. Frame findings as potential exposures that warrant review, not confirmed exploitable vulnerabilities
+7. Business Impact Analysis: Must NOT read like a verdict or incident-response conclusion. Use guiding tone, not judging tone. Make impact statements conditional, forward-looking, and non-absolute.
+8. Risk Trend Analysis: DO NOT show "Total Vulnerabilities: 0" when findings exist. Either reframe as baseline assessment OR remove numeric chart and explain trend data requires historical scans.
+9. Focus on visibility and awareness, not declarative business impact
+10. For Risk Trend Analysis: Frame as "visibility over time" not "increasing risk"
+11. Remove compliance references (PCI-DSS, GDPR) - these belong in full pen tests only
+12. Language patterns: "vulnerability" → "observation" where possible, "attackers could" → "may increase likelihood", "could lead to" → "may warrant review"
+13. CONSISTENT POSITIONING: Ensure the report consistently reflects that this is a non-intrusive external vulnerability scan, no exploitation was attempted, findings are directional not confirmations of compromise. Do not introduce penetration-test language, breach confirmation language, or incident-response phrasing.`
+}
 
 ${aggressiveModeInstructions}
 
@@ -335,6 +705,32 @@ CRITICAL DATA ANALYSIS REQUIREMENT - ACCURACY IS MANDATORY:
 - DO NOT use placeholder or example risk ratings - use ONLY what the data shows
 - DO NOT summarize or omit technical details - include EVERYTHING from the source files
 - The risk rating MUST be consistent with the findings summary table
+
+🚨 CRITICAL STATISTICAL CONSISTENCY - SECTION 4 IS THE SINGLE SOURCE OF TRUTH:
+- Section 4 (Detailed Findings) is the AUTHORITATIVE source for ALL statistics in the report
+- BEFORE writing ANY section that mentions counts or statistics, you MUST:
+  1. FIRST: Generate Section 4 (Detailed Findings) completely
+  2. SECOND: Count the EXACT number of findings in Section 4:
+     * Count High observations in Section 4
+     * Count Medium observations in Section 4
+     * Count Low observations in Section 4
+     * Calculate TOTAL = High + Medium + Low
+  3. THIRD: Use those EXACT counts in ALL other sections
+- ALL sections MUST use the SAME counts as Section 4:
+  * Section 1.3 (Summary of Observations) MUST use Section 4's counts
+  * Section 5.2 (Severity Distribution) MUST use Section 4's counts
+  * Section 5.6 (Risk Trend Analysis) MUST use Section 4's counts
+  * ANY chart or graph MUST use Section 4's counts
+- If Section 4 shows "1 High, 5 Medium, 2 Low = 8 Total", then:
+  * Section 1.3 MUST show "8 observations" (not 10, not 6, EXACTLY 8)
+  * Section 5.2 MUST show "High: 1, Medium: 5, Low: 2, Total: 8" (EXACTLY these numbers)
+  * Section 5.6 chart MUST show "High: 1 (12.5%), Medium: 5 (62.5%), Low: 2 (25.0%), Total: 8" (EXACTLY these numbers)
+  * NO section can show "0" or different numbers
+- Charts and graphs MUST be dynamic based on Section 4's actual data:
+  * If Section 4 has findings, charts MUST show those findings with correct counts and percentages
+  * DO NOT show all zeros when Section 4 has findings
+  * Calculate percentages: (Count / Total) × 100
+- There can be NO discrepancies between sections - all counts MUST match Section 4 exactly
 - FORMAT ALL COMMANDS AND CODE: When you find commands, terminal output, or code snippets in the data, format them as code blocks using triple backticks. This includes:
   * All command-line commands (smbclient, nmap, rpcclient, etc.)
   * All terminal outputs and responses
@@ -356,39 +752,81 @@ DATE REPLACEMENT REQUIREMENT:
 - Format all dates consistently as: ${todayFormatted}
 - For any date ranges, use "through ${todayFormatted}" or "up to ${todayFormatted}"
 
-Analyse the following COMPLETE penetration test data (this includes all files with their full content) and create a COMPREHENSIVE, DETAILED, deeply explained CUSTOMER-FACING report${
+Analyse the following COMPLETE ${
       request.pentestType === 'aggressive'
-        ? ' with MAXIMUM detail and technical depth'
-        : ' that fills exactly 4-5 pages when rendered in PDF format'
+        ? 'penetration test'
+        : 'vulnerability scan'
+    } data (this includes all files with their full content) and create a COMPREHENSIVE, DETAILED, deeply explained CUSTOMER-FACING report${
+      request.pentestType === 'aggressive'
+        ? ' with MAXIMUM detail and technical depth (10,000-15,000+ words). CRITICAL: This is an AGGRESSIVE PENETRATION TEST REPORT, NOT a vulnerability scan. The content MUST be fundamentally different from a basic vulnerability scan report. Focus on ACTIVE EXPLOITATION, attack chains, breach scenarios, and real-world attack methodologies. Show what aggressive pen testing REALLY looks like through actual exploitation commands and evidence. EVERY finding MUST include actual commands in code blocks - commands are MANDATORY, not optional. Content must be EXTREMELY descriptive with 5-10 paragraphs per finding minimum.'
+        : ' that fills 10-25+ pages when rendered in PDF format (page count should scale with number of findings - minimum 10 pages, often 15-20+ pages for comprehensive reports). Word count should be approximately 8,000-20,000+ words depending on findings. CRITICAL: This is a VULNERABILITY SCAN REPORT, NOT a penetration test. The language must be softened throughout - no fear-mongering, no "critical risk" ratings that assume breach outcomes, no exploitation claims. Frame findings as potential exposures that warrant review, not confirmed exploitable vulnerabilities. Use language like "may warrant further investigation", "should be reviewed", "potential exposure" rather than "critical vulnerability", "allows remote code execution", "complete system compromise". The report MUST be substantial, comprehensive, and provide maximum value - it should look like a premium, high-value document worth significant investment.'
     }.
 
 CRITICAL REQUIREMENTS:
+
+🚨 ZERO TOLERANCE FOR ONE-LINERS - ABSOLUTE RULE:
+- NO section, subsection, or topic can be one line or one sentence
+- EVERY section must have MULTIPLE paragraphs (minimum 2-3 paragraphs)
+- EVERY paragraph must be 3-5 sentences minimum
+- EVERY sentence must be meaningful and add value
+- Single-line descriptions are FORBIDDEN
+- Brief statements without context are FORBIDDEN
+- Lists without detailed explanations are FORBIDDEN
+
 1. ${
       request.pentestType === 'aggressive'
-        ? 'For AGGRESSIVE mode: Generate a COMPREHENSIVE report with NO word limit. Aim for 10000-15000+ words with extensive detail. The report should be substantial and provide maximum value. For SOFT mode: Generate a DETAILED report with 6000-8000 words (approximately 6-8 pages) - significantly more in-depth than basic reports. The report MUST provide substantial value with comprehensive analysis.'
-        : 'For SOFT mode: Generate a DETAILED, IN-DEPTH report with 6000-8000 words (approximately 6-8 pages when rendered in PDF format). The report MUST be comprehensive and provide substantial value - not just a brief summary. Include detailed analysis, thorough explanations, and actionable insights.'
+        ? 'For AGGRESSIVE mode: Generate a COMPREHENSIVE report with NO word limit. Aim for 10,000-15,000+ words with EXTENSIVE detail. The report should be substantial and provide maximum value. CRITICAL: Content must be EXTREMELY descriptive - every finding must be 5-10 paragraphs minimum. Commands are MANDATORY for every finding - include actual exploitation commands in code blocks. Show REAL attack scenarios with complete exploitation evidence. This is fundamentally different from soft mode - focus on ACTIVE EXPLOITATION, not passive scanning.'
+        : 'For SOFT mode (Vulnerability Scan Reports): Generate an EXTENSIVE, COMPREHENSIVE, DETAILED report that fills 10-25+ pages when rendered in PDF format. The page count should scale with the number of findings - minimum 10 pages, often 15-20+ pages for comprehensive reports. Word count should be approximately 8,000-20,000+ words depending on findings (roughly 800-1,000 words per page). The report MUST be substantial, comprehensive, and provide maximum value - it should look like a premium, high-value document. Include EXTENSIVE detailed analysis, thorough explanations, comprehensive context, and actionable insights. CRITICAL: NO one-liners allowed - every section must have multiple paragraphs (3-4 paragraphs minimum) with substantial content (15-20+ lines per section). Each paragraph must be 4-6 sentences minimum. Content quality must be top-notch and provide real value. The report should feel weighty and comprehensive - like a professional security assessment worth significant investment.'
     }
 2. CRITICAL STRUCTURE REQUIREMENT: The report MUST contain AT LEAST 25 SECTIONS total (main sections + subsections combined). This is mandatory and non-negotiable. Create comprehensive sections and subsections to meet this requirement. Examples: Executive Summary with 5+ subsections, Test Scope with 5+ subsections, Detailed Findings with each finding as a separate subsection, Risk Assessment with multiple subsections, IP-specific analysis sections (when multiple IPs are present), Vulnerability category sections, Compliance mapping sections, Technical deep-dives, Attack path analysis, Remediation guides, etc.
 
-3. CRITICAL CONTENT REQUIREMENT FOR EVERY SECTION: EVERY section and subsection MUST contain SUBSTANTIAL, DETAILED content. This is mandatory for ALL sections:
+3. CRITICAL CONTENT REQUIREMENT FOR EVERY SECTION - ZERO TOLERANCE FOR ONE-LINERS AND EMPTY SECTIONS:
+   🚨 ABSOLUTE RULE: NO SECTION OR SUBSECTION CAN BE ONE LINE OR EMPTY. EVERY section is MANDATORY and MUST have MULTIPLE paragraphs with substantial content.
+   🚨 MANDATORY SECTIONS: ALL sections listed in the Table of Contents are COMPULSORY and MUST be included with substantial content. NO section can be skipped or left empty.
+   
    - DO NOT write generic definitions or brief descriptions
    - DO NOT explain what a section is - instead explain how it affects ${domainName} specifically
+   - DO NOT write single-sentence paragraphs - every paragraph must be 3-5 sentences minimum
    - Focus on CLIENT-SPECIFIC impact, value, and recommendations
-   - Minimum content requirements:
-     * Recommendation sections (6.1-6.6): 15-20 lines minimum each
-     * Appendix sections (7.1-7.4): 20-30 lines minimum each
-     * All other sections: 10-15 lines minimum each
+   
+   - STRICT Minimum content requirements (these are MINIMUMS, not targets):
+     * Recommendation sections (6.1-6.6): 20-25 lines minimum each (NOT 15-20, but 20-25)
+       - Each subsection within recommendations: 5-7 lines minimum
+       - Multiple paragraphs required (at least 3-4 paragraphs per section)
+       - Each paragraph: 3-5 sentences minimum
+     * Appendix sections (7.1-7.4): 25-30 lines minimum each
+     * All other sections: 12-18 lines minimum each (NOT 10-15, but 12-18)
+       - Multiple paragraphs required (at least 2-3 paragraphs per section)
+   
    - Content must be:
      * SPECIFIC to ${domainName} and THIS test's findings
      * ACTIONABLE with detailed steps and guidance
      * VALUABLE explaining how it helps ${domainName}
      * IMPACT-FOCUSED explaining how it affects ${domainName}
+     * MEANINGFUL - every sentence must add value and information
+   
    - Reference actual findings, systems, and vulnerabilities from THIS test
    - Explain WHY recommendations matter to ${domainName}'s business
    - Show HOW improvements will help ${domainName}
-   - Brief one-line descriptions are NOT acceptable
-   - Generic definitions are NOT acceptable
+   - Provide specific examples, scenarios, and use cases
+   - Include detailed explanations, not just bullet points
+   
+   - FORBIDDEN CONTENT (DO NOT DO THIS):
+     * Single-line descriptions (e.g., "Implement firewall rules within 48 hours.")
+     * Generic one-liners (e.g., "Secure backup directories.")
+     * Brief statements without context (e.g., "Deploy emergency monitoring.")
+     * Lists without explanations (just bullet points with no detail)
+   
+   - REQUIRED CONTENT STRUCTURE:
+     * Start with context (2-3 sentences explaining the situation)
+     * Provide detailed explanation (3-5 sentences with specifics)
+     * Include actionable steps (2-3 sentences with how-to details)
+     * Explain business impact (2-3 sentences on why it matters)
+     * Conclude with value proposition (1-2 sentences on benefits)
+   
    - Every section must be SUBSTANTIAL and provide real value
+   - Every paragraph must be MEANINGFUL and informative
+   - Every sentence must add information, not just fill space
 4. Be DEEP and THOROUGH in explanations - expand on findings, provide context, explain implications
 5. Analyse ALL files and extract ALL findings, vulnerabilities, and security issues mentioned
 6. Include EVERY critical and high-severity finding found in the data with full explanations
@@ -404,12 +842,23 @@ Create a comprehensive table of contents that lists ALL sections and subsections
 
 MAIN SECTIONS (##):
 - 1. Executive Summary
-  - 1.1 Overall Risk Rating
+${
+  request.pentestType === 'soft'
+    ? `  - 1.1 What This Scan Is (and Is Not)
+  - 1.2 Overview
+  - 1.3 Summary of Observations
+  - 1.4 Key Observations (High-Level)`
+    : `  - 1.1 Overall Risk Rating
   - 1.2 Key Findings Summary
   - 1.3 Business Impact Assessment
   - 1.4 Risk Overview Matrix
-  - 1.5 Testing Overview
-- 2. Test Scope and Methodology
+  - 1.5 Testing Overview`
+}
+- 2. ${
+      request.pentestType === 'soft'
+        ? 'Scope of Assessment'
+        : 'Test Scope and Methodology'
+    }
   - 2.1 Systems Tested
   - 2.2 Testing Approach
   - 2.3 Standards and Frameworks
@@ -434,14 +883,35 @@ MAIN SECTIONS (##):
   - 5.4 Compliance Impact
   - 5.5 Risk Prioritization
   - 5.6 Risk Trend Analysis
-- 6. Recommendations and Next Steps
-  - 6.1 Immediate Actions
-  - 6.2 Short-term Remediation
-  - 6.3 Long-term Improvements
+- 6. ${
+      request.pentestType === 'soft'
+        ? 'Recommended Next Steps'
+        : 'Recommendations and Next Steps'
+    }
+  - 6.1 ${
+    request.pentestType === 'soft'
+      ? 'Short-Term (Good Practice)'
+      : 'Immediate Actions'
+  }
+  - 6.2 ${
+    request.pentestType === 'soft'
+      ? 'Optional Validation'
+      : 'Short-term Remediation'
+  }
+  - 6.3 ${
+    request.pentestType === 'soft'
+      ? 'How This Scan Is Best Used'
+      : 'Long-term Improvements'
+  }
   - 6.4 Remediation Priority Matrix (MANDATORY - must use card format)
   - 6.5 Implementation Roadmap (MANDATORY - must use card format with WEEKS 1-2, WEEKS 3-4, and long-term roadmap)
   - 6.6 Success Metrics
-- 7. Appendices
+- ${request.pentestType === 'soft' ? '7' : '7'}. Appendices
+${
+  request.pentestType === 'soft'
+    ? '  - 7.1 Scope & Methodology Details\n  - 7.2 Technical References\n  - 7.3 Glossary\n  - 7.4 Additional Resources\n- 8. Closing Note'
+    : ''
+}
   - 7.1 Scope & Methodology Details
   - 7.2 Technical References
   - 7.3 Glossary
@@ -464,23 +934,148 @@ Provide a COMPREHENSIVE, DETAILED overview that fills${
         : ' at least 1 full page'
     }:
 
-### 1.1 Overall Risk Rating
-CRITICAL: This section MUST contain at least 6-7 lines of informative content. Provide:
-- High-level overview of the security assessment engagement (use customer-friendly language, mention dates as ${todayFormatted})
-- CLEARLY STATE that ${pentestTypeDescription} and explain what this testing approach means${
-      request.pentestType === 'aggressive'
-        ? ' in both business and technical terms, emphasizing the comprehensive nature of aggressive testing across multiple IP addresses'
-        : ' in business terms'
-    }
-- Detailed context about the assessment scope and objectives
-- Explanation of the risk rating methodology and how it was calculated
-- Business context for why this risk rating matters to the organization
 ${
-  request.pentestType === 'aggressive'
-    ? '- CRITICAL MULTI-IP OVERVIEW: The assessment covered MULTIPLE IP ADDRESSES for the same domain. Document:\n  * Complete list of all IP addresses tested\n  * Attack surface diversity across different IPs\n  * Summary of findings per IP address\n  * Comparison of security postures across IPs\n  * Which IPs are most critical/vulnerable and why\n- ATTACK SURFACE OVERVIEW: Provide comprehensive overview of attack surface diversity across different IPs, showing how each IP represents a separate infrastructure component\n- COMPREHENSIVE RISK OVERVIEW: Create a detailed risk matrix showing:\n  * Overall risk rating with CVSS-based scoring\n  * Risk distribution across different IP addresses (which IPs have highest risk)\n  * Critical attack paths identified per IP\n  * Potential lateral movement scenarios between IPs\n  * Business impact severity matrix with IP-specific considerations'
+  request.pentestType === 'soft'
+    ? `### 1.1 What This Scan Is (and Is Not)
+CRITICAL: This section MUST be included for vulnerability scan reports. Provide a clear, boxed section that explains:
+
+**What this scan is:**
+
+• A consent-based, external vulnerability scan
+• Focused on publicly exposed services and configurations
+• Intended to highlight potential areas for review
+• Suitable for regular monitoring and early risk awareness
+• Non-intrusive and designed to identify potential security hygiene issues
+
+**What this scan is not:**
+
+• Not a penetration test
+• Not an exploitative assessment
+• Not an internal network review
+• Not confirmation of compromise or breach
+• Not an assessment of application logic flaws
+• Not an authentication bypass test
+
+**Important Note:**
+
+**Further validation is required to confirm exploitability or business impact for any findings. This scan provides directional insight, not definitive risk ratings. Actual risk depends on internal architecture, patch levels, access controls, and compensating security measures${companyNameSuffix}.**
+
+`
     : ''
 }
-CRITICAL RISK RATING CALCULATION - MUST BE ACCURATE AND DATA-DRIVEN:
+### 1.${request.pentestType === 'soft' ? '2' : '1'} Overview
+${
+  request.pentestType === 'soft'
+    ? `CRITICAL: This section MUST contain at least 8-10 lines of informative content. Provide:
+- This report presents the results of a non-intrusive external vulnerability scan conducted against ${domainName}${companyNameSuffix}
+- The purpose of this scan is to provide early visibility of potential external security exposures based on publicly accessible systems, configurations, and software versions${companyNameSuffix}
+- This assessment is designed to support informed security conversations and does not attempt to exploit vulnerabilities or disrupt live systems${companyNameSuffix}
+- Detailed context about the assessment scope and objectives
+- Explanation that this scan provides directional insight based on external observation only, not definitive risk ratings
+- Business context for why this assessment matters to the organization${companyNameSuffix}
+- Date of assessment: ${todayFormatted}${companyNameSuffix}`
+    : `CRITICAL: This section MUST contain at least 6-7 lines of informative content. Provide:
+- High-level overview of the security assessment engagement (use customer-friendly language, mention dates as ${todayFormatted})
+- CLEARLY STATE that ${pentestTypeDescription} and explain what this testing approach means in both business and technical terms, emphasizing the comprehensive nature of aggressive testing across multiple IP addresses
+- Detailed context about the assessment scope and objectives
+- Explanation of the risk rating methodology and how it was calculated
+- Business context for why this assessment matters to the organization${companyNameSuffix}`
+}
+${
+  request.pentestType === 'aggressive'
+    ? '- CRITICAL MULTI-IP OVERVIEW: The assessment covered MULTIPLE IP ADDRESSES for the same domain. Document:\n  * Complete list of all IP addresses tested\n  * Attack surface diversity across different IPs\n  * Summary of findings per IP address\n  * Comparison of security postures across IPs\n  * Which IPs are most critical/vulnerable and why\n- ATTACK SURFACE OVERVIEW: Provide comprehensive overview of attack surface diversity across different IPs, showing how each IP represents a separate infrastructure component\n- COMPREHENSIVE RISK OVERVIEW: Create a detailed risk matrix showing:\n  * Overall risk rating with CVSS-based scoring\n  * Risk distribution across different IP addresses (which IPs have highest risk)\n  * Critical attack paths identified per IP\n  * Potential lateral movement scenarios between IPs\n  * Business impact severity matrix with IP-specific considerations\nCRITICAL RISK RATING CALCULATION - MUST BE ACCURATE AND DATA-DRIVEN:'
+    : `### 1.3 Summary of Observations
+CRITICAL CONSISTENCY REQUIREMENT - SECTION 4 IS THE SOURCE OF TRUTH:
+- This section MUST use the EXACT SAME counts as Section 4 (Detailed Findings)
+- BEFORE writing this section, COUNT the TOTAL findings in Section 4
+- If Section 4 lists findings (e.g., "1 High, 5 Medium, 2 Low = 8 total"), use those EXACT counts here
+- DO NOT show "0" or "No findings" if findings are listed in Section 4
+- The counts in this section MUST match Section 4 exactly - if Section 4 shows 10 total, this section MUST show 10 total
+
+CRITICAL: This section MUST contain at least 8-10 lines of informative content. Provide:
+
+MANDATORY PROCESS - FOLLOW THESE STEPS IN ORDER:
+1. FIRST: Count the findings in Section 4 (Detailed Findings):
+   * Count High observations in Section 4 = [X]
+   * Count Medium observations in Section 4 = [Y]
+   * Count Low observations in Section 4 = [Z]
+   * Calculate TOTAL = X + Y + Z
+
+2. SECOND: Create the observation summary table using those EXACT counts:
+
+| Observation Level | Count |
+|-------------------|-------|
+| High | [X - EXACT count from Section 4] |
+| Medium | [Y - EXACT count from Section 4] |
+| Low | [Z - EXACT count from Section 4] |
+| Total | [X + Y + Z - MUST equal the sum above] |
+
+3. THIRD: Write the introductory text using the SAME TOTAL from the table:
+   - Calculate: Table Total = High count + Medium count + Low count
+   - Write: "The scan identified [Table Total - use the EXACT number from table Total row] externally visible security observations that may warrant review${companyNameSuffix}"
+   - CRITICAL CONSISTENCY CHECK: Before finalizing, verify:
+     * Table shows: High: [X], Medium: [Y], Low: [Z], Total: [X+Y+Z]
+     * Text says: "[X+Y+Z] observations" (NOT X+Y+Z+2, NOT a different number)
+   - If table shows "Total: 9", text MUST say "9 observations" - NOT "11", NOT "10", NOT any other number
+   - If table shows "Total: 8", text MUST say "8 observations" - NOT "9", NOT "11", NOT any other number
+   - The number in the text MUST EXACTLY match the "Total" row in the table - NO EXCEPTIONS
+   - DO NOT add extra observations, DO NOT round up, DO NOT use a different total
+
+4. FOURTH: Add additional context (can be in bullet points below the table):
+   * Number of items related to publicly disclosed software versions
+   * Number of configuration-level observations (headers, cookies, service behaviour)
+   * Confirmation that no evidence of active exploitation was found
+   * Confirmation that no testing of internal systems or data access was performed
+
+🚨 ABSOLUTE RULE - TEXT TOTAL MUST MATCH TABLE TOTAL:
+- The total number mentioned in the text MUST EXACTLY match the "Total" row in the table
+- There can be NO discrepancy - zero tolerance for mismatches
+- Calculation process:
+  1. Count findings in Section 4: High=[X], Medium=[Y], Low=[Z]
+  2. Table Total = X + Y + Z
+  3. Text MUST say: "[X+Y+Z] observations" (use the EXACT sum, no additions, no rounding)
+- Examples:
+  * If table shows "Total: 9" (3 High + 5 Medium + 1 Low), text MUST say "9 observations" - NOT "11"
+  * If table shows "Total: 8" (1 High + 5 Medium + 2 Low), text MUST say "8 observations" - NOT "9" or "10"
+  * If table shows "Total: 11" (2 High + 7 Medium + 2 Low), text MUST say "11 observations" - NOT "9" or "12"
+- DO NOT add informational items to the total
+- DO NOT count "Number of items related to publicly disclosed software versions" in the total
+- DO NOT count "Number of configuration-level observations" in the total
+- The total is ONLY High + Medium + Low observations from Section 4
+- Context that these observations represent potential areas for review, not confirmed exploitable vulnerabilities${companyNameSuffix}
+- Explanation that further validation is recommended to assess real-world risk${companyNameSuffix}
+
+### 1.4 Key Observations (High-Level)
+CRITICAL: This section MUST contain at least 12-15 lines of informative content. Provide detailed high-level overview of key observation categories:
+
+**Publicly Disclosed Software Version:**
+- A publicly known [CVE/software name] vulnerability was identified based on external service version information${companyNameSuffix}
+- This scan did not attempt exploitation - presence does not confirm exposure${companyNameSuffix}
+- Further validation is recommended to confirm relevance and risk in context${companyNameSuffix}
+- Explanation of what this means and why it may warrant review${companyNameSuffix}
+
+**Web Security Configuration:**
+- Several standard web security best practices were not fully implemented, including:
+  * Security headers (e.g. frame and content controls)
+  * Session cookie attributes
+- These items are commonly addressed as part of routine security hardening${companyNameSuffix}
+- Explanation of why these configurations matter and how they can be improved${companyNameSuffix}
+
+**Service Behaviour & Exposure:**
+- The scan observed:
+  * SMTP behaviour that may allow email address validation
+  * Public access to a hosting management interface (if applicable)
+  * Disclosure of server version information via headers
+- These findings represent configuration considerations, not confirmed weaknesses${companyNameSuffix}
+- Explanation of what these observations mean and potential implications${companyNameSuffix}
+
+`
+}
+${
+  request.pentestType === 'aggressive'
+    ? `CRITICAL RISK RATING CALCULATION - MUST BE ACCURATE AND DATA-DRIVEN:`
+    : ''
+}
 
 STEP 1: FIRST, analyze ALL the uploaded data and count findings by severity:
 - Read through ALL files completely
@@ -522,12 +1117,41 @@ You MUST format the risk calculation details in a special box format. Use this e
 
 IMPORTANT: Format this calculation section with clear bullet points. The Overall Risk Rating should be in Title Case (first letter capitalized, rest lowercase), NOT in UPPERCASE. This will be displayed in a styled grey background box in the PDF.
 
-CRITICAL CONSISTENCY REQUIREMENT:
+CRITICAL CONSISTENCY REQUIREMENT - STATISTICS MUST BE CONSISTENT THROUGHOUT THE ENTIRE REPORT:
 - The risk rating category MUST be consistent with the findings summary table
 - If the table shows 3 Critical findings, the risk rating MUST reflect this (likely "Critical" or "High" in Title Case)
 - If the table shows 0 Critical findings, the risk rating CANNOT be CRITICAL
 - The risk score MUST be calculated from the actual counts in the findings table
 - DO NOT create conflicting information - the risk rating and findings table MUST align
+
+MANDATORY STATISTICAL CONSISTENCY ACROSS ALL SECTIONS - SECTION 4 IS THE SINGLE SOURCE OF TRUTH:
+
+CRITICAL: Section 4 (Detailed Findings) is the AUTHORITATIVE SOURCE for all statistics. ALL other sections MUST reference Section 4's counts.
+
+STEP-BY-STEP PROCESS:
+1. FIRST: Generate Section 4 (Detailed Findings) and count the EXACT number of findings in each category
+2. SECOND: Use those EXACT counts in ALL other sections - do NOT recalculate or use different numbers
+3. THIRD: Ensure the TOTAL count matches across all sections (if Section 4 has 10 findings total, ALL sections must show 10 total)
+
+MANDATORY REQUIREMENTS:
+- Section 1.3 (Summary of Observations) MUST use EXACT counts from Section 4 - if Section 4 lists 10 total findings, Section 1.3 MUST say "10 observations" not a different number
+- Section 5.2 (Severity Distribution) MUST use EXACT counts from Section 4 - if Section 4 shows "1 High, 5 Medium, 2 Low", Section 5.2 MUST show the SAME numbers
+- Section 5.6 (Risk Trend Analysis) MUST use EXACT counts from Section 4 - if Section 4 lists findings, the chart MUST show those ACTUAL numbers, NOT zeros
+- Executive Summary MUST use EXACT counts from Section 4
+- ANY section mentioning findings counts MUST use the EXACT SAME numbers as Section 4
+- Charts and graphs MUST use ACTUAL data from Section 4 - if Section 4 has findings, charts MUST reflect those findings with correct percentages
+- DO NOT say "No high-severity findings identified" if Section 4 lists high-severity findings
+- DO NOT show "0" for any severity level if Section 4 lists findings in that category
+- DO NOT show "Total Vulnerabilities: 0" if Section 4 lists any findings
+- If Section 4 lists 10 total findings, ALL sections must show 10 total - there can be NO discrepancies
+
+CHART/GRAPH REQUIREMENTS:
+- If you create a "Severity Distribution Overview" chart or any visual representation:
+  * Use the EXACT counts from Section 4
+  * Calculate percentages based on ACTUAL counts from Section 4
+  * Show "Total Vulnerabilities: [ACTUAL TOTAL from Section 4]" not "0"
+  * If Section 4 has 1 High, 5 Medium, 2 Low, the chart MUST show those numbers with correct percentages
+  * DO NOT show all zeros when Section 4 has findings
 
 STEP 5: After the risk rating explanation, include the FINDINGS SUMMARY TABLE:
 
@@ -553,22 +1177,34 @@ If data shows: 2 Critical, 3 High, 5 Medium, 2 Low
 - Table shows: Critical: 2, High: 3, Medium: 5, Low: 2, Total: 12
 - The risk rating should be presented as "Critical" (Title Case), not "CRITICAL" (uppercase)
 
-### 1.2 Key Findings Summary
-CRITICAL: This section MUST contain at least 6-7 lines of informative content about the ACTUAL findings from THIS penetration test. DO NOT write generic definitions or explanations of what this section is. Write SPECIFIC content about the findings discovered. Provide:
-- DETAILED summary of ALL key security findings discovered - describe each major finding${
+### 1.${request.pentestType === 'soft' ? '3' : '2'} Key Findings Summary
+CRITICAL: This section MUST contain at least 6-7 lines of informative content about the ACTUAL findings from THIS ${
+      request.pentestType === 'aggressive'
+        ? 'penetration test'
+        : 'vulnerability scan'
+    }. DO NOT write generic definitions or explanations of what this section is. Write SPECIFIC content about the findings discovered. Provide:
+- DETAILED summary of ALL key security observations discovered - describe each major finding${
       request.pentestType === 'aggressive'
         ? ' with both technical depth and business impact. Include IP-specific findings where applicable.'
-        : ' in business impact terms, not technical jargon'
+        : ' in business impact terms, not technical jargon. Frame as potential exposures that warrant review, not confirmed exploitable vulnerabilities'
     }
-- COMPREHENSIVE business impact assessment - explain potential consequences in financial terms, operational terms, and reputation terms
-- DETAILED key recommendations overview - prioritize and explain each major recommendation with business justification
+${
+  request.pentestType === 'soft'
+    ? '- Overview of externally visible security configurations and known software versions that may warrant further investigation'
+    : '- COMPREHENSIVE business impact assessment - explain potential consequences in financial terms, operational terms, and reputation terms'
+}
+- DETAILED key recommendations overview - prioritize and explain each major recommendation with business justification${companyNameSuffix}
 - Testing methodology summary - what was tested${
       request.pentestType === 'aggressive'
         ? ' with detailed technical methodology, tools used, exploitation techniques, and validation approaches'
         : ' (use simple language, avoid technical tool names unless necessary)'
     }
-- Summary of critical vulnerabilities and their potential business impact
-- Overview of remediation priorities and recommended actions
+${
+  request.pentestType === 'soft'
+    ? '- Summary of potential security observations and why they may be worth reviewing'
+    : '- Summary of critical vulnerabilities and their potential business impact'
+}
+- Overview of remediation priorities and recommended actions${companyNameSuffix}
 ${
   request.pentestType === 'aggressive'
     ? '- Include a REMEDIATION PRIORITY MATRIX showing immediate, short-term, and long-term remediation priorities with resource requirements'
@@ -576,86 +1212,131 @@ ${
 }
 
 ## Test Scope and Methodology
-Provide COMPREHENSIVE, DETAILED testing information that fills substantial space (written for customers). Each subsection MUST contain 6-7 lines of valuable, detailed content:
+Provide COMPREHENSIVE, DETAILED testing information that fills substantial space (written for customers). Each subsection MUST contain at least 15-20 lines of substantial, detailed content (NOT 6-7 lines). ABSOLUTELY NO ONE-LINERS ALLOWED. Every subsection must have MULTIPLE paragraphs (3-4 paragraphs minimum), each with 4-6 sentences.
 
 ### 2.1 Systems Tested
-Provide 6-7 lines of detailed content:
-- DETAILED overview of all systems and applications tested - use business-friendly names, avoid technical IPs/ports unless essential
-- Comprehensive list of infrastructure components assessed (web applications, APIs, network services, etc.)
-- Specific domains, subdomains, and endpoints that were included in the assessment
-- Business context for each system - explain what each system does and why it matters to the organization
-- Scope boundaries - clearly define what was tested and what was excluded
-- Testing environment details - describe the production, staging, or development environments assessed
-- Asset inventory - provide a comprehensive overview of all assets included in the penetration test
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- DETAILED overview of all systems and applications tested - use business-friendly names, avoid technical IPs/ports unless essential (2-3 sentences)
+- Comprehensive list of infrastructure components assessed (web applications, APIs, network services, etc.) with detailed descriptions (2-3 sentences)
+- Specific domains, subdomains, and endpoints that were included in the assessment with business context (2-3 sentences)
+- Business context for each system - explain what each system does and why it matters to the organization (2-3 sentences)
+- Scope boundaries - clearly define what was tested and what was excluded with detailed explanations (2-3 sentences)
+- Testing environment details - describe the production, staging, or development environments assessed (2-3 sentences)
+- Asset inventory - provide a comprehensive overview of all assets included in the assessment with categorization (2-3 sentences)
 
 ### 2.2 Testing Approach
-Provide 6-7 lines of detailed content:
-- CLEARLY STATE that this was a ${request.pentestType.toUpperCase()} penetration test and explain the testing approach methodology (${pentestTypeContext})
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+${
+  request.pentestType === 'soft'
+    ? '- CLEARLY STATE that this was a non-intrusive external vulnerability scan, NOT a penetration test, and explain the scanning approach methodology (${pentestTypeContext})'
+    : '- CLEARLY STATE that this was a ${request.pentestType.toUpperCase()} penetration test and explain the testing approach methodology (${pentestTypeContext})'
+}
 - EXPANDED testing approach - explain WHAT was tested and WHY it matters to security, not HOW technically
-- Detailed methodology breakdown - describe each phase of testing (reconnaissance, scanning, vulnerability assessment, exploitation validation)
-- Testing techniques employed - explain the types of tests performed (black box, grey box, etc.) and their relevance
+${
+  request.pentestType === 'soft'
+    ? '- Detailed methodology breakdown - describe each phase of scanning (reconnaissance, service identification, version detection, configuration review) - emphasize NO exploitation was attempted'
+    : '- Detailed methodology breakdown - describe each phase of testing (reconnaissance, scanning, vulnerability assessment, exploitation validation)'
+}
+- Testing techniques employed - explain the types of tests performed${
+      request.pentestType === 'soft'
+        ? ' (external scanning, banner grabbing, header analysis) and emphasize non-intrusive nature'
+        : ' (black box, grey box, etc.) and their relevance'
+    }
 - Tools and technologies used - mention testing tools in business-friendly terms and explain their purpose
-- Validation approach - describe how findings were verified and confirmed
+${
+  request.pentestType === 'soft'
+    ? '- Validation approach - describe that findings are based on external observation and version identification, not active exploitation'
+    : '- Validation approach - describe how findings were verified and confirmed'
+}
 - Testing depth and coverage - explain the comprehensiveness of the assessment and what was covered
 
 ### 2.3 Standards and Frameworks
-Provide 6-7 lines of detailed content:
-- COMPREHENSIVE list of standards and frameworks (OWASP, NIST, ISO 27001, PTES, etc.) - explain what these mean for security posture
-- Detailed explanation of how each standard was applied during the assessment
-- Framework alignment - show how the testing methodology aligns with industry best practices
-- Compliance considerations - explain how findings relate to regulatory requirements (PCI-DSS, GDPR, HIPAA, etc.)
-- Industry benchmark comparison - explain how the assessment compares to industry standards
-- Framework-specific findings - describe which vulnerabilities map to specific framework categories (e.g., OWASP Top 10)
-- Standards compliance gaps - identify areas where the organization may not meet industry standards
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- COMPREHENSIVE list of standards and frameworks (OWASP, NIST, ISO 27001, PTES, etc.) - explain what these mean for security posture with detailed context (2-3 sentences)
+- Detailed explanation of how each standard was applied during the assessment with specific examples (2-3 sentences)
+- Framework alignment - show how the testing methodology aligns with industry best practices and why it matters (2-3 sentences)
+- Compliance considerations - explain how findings relate to regulatory requirements with business context (2-3 sentences)
+- Industry benchmark comparison - explain how the assessment compares to industry standards with detailed analysis (2-3 sentences)
+- Framework-specific findings - describe which vulnerabilities map to specific framework categories (e.g., OWASP Top 10) with examples (2-3 sentences)
+- Standards compliance gaps - identify areas where the organization may not meet industry standards with recommendations (2-3 sentences)
 
 ### 2.4 Testing Timeline
-Provide 6-7 lines of detailed content:
-- DETAILED testing timeline - use dates formatted as ${todayFormatted}, describe phases in business terms
-- Comprehensive schedule breakdown - provide specific dates and durations for each testing phase
-- Phase-by-phase timeline - explain what was tested during each phase and when
-- Resource allocation - describe the time and effort invested in each aspect of the assessment
-- Testing milestones - highlight key dates and achievements during the penetration test
-- Coordination and communication - explain how the testing was coordinated with the organization
-- Final delivery timeline - specify when the assessment was completed and when the report is being delivered
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- DETAILED testing timeline - use dates formatted as ${todayFormatted}, describe phases in business terms with comprehensive details (2-3 sentences)
+- Comprehensive schedule breakdown - provide specific dates and durations for each testing phase with explanations (2-3 sentences)
+- Phase-by-phase timeline - explain what was tested during each phase and when with detailed descriptions (2-3 sentences)
+- Resource allocation - describe the time and effort invested in each aspect of the assessment with context (2-3 sentences)
+- Testing milestones - highlight key dates and achievements during the assessment with detailed descriptions (2-3 sentences)
+- Coordination and communication - explain how the testing was coordinated with the organization with specific details (2-3 sentences)
+- Final delivery timeline - specify when the assessment was completed and when the report is being delivered with context (2-3 sentences)
 
 ### 2.5 Scope Limitations
-Provide 6-7 lines of detailed content:
-- Methodology limitations and scope boundaries - explain what was and wasn't tested in business context (what risks might exist outside scope)
-- Detailed explanation of excluded areas - clearly define what was not tested and why
-- Scope constraints - describe any limitations that affected the assessment (time, access, technical constraints)
-- Potential blind spots - identify areas that may require additional testing or assessment
-- Recommendations for expanded testing - suggest areas that could benefit from future assessments
-- Risk areas outside scope - explain potential security risks that exist in areas not covered by this assessment
-- Limitations impact - describe how these limitations affect the overall security assessment and what they mean for the organization
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Methodology limitations and scope boundaries - explain what was and wasn't tested in business context (what risks might exist outside scope) with detailed explanations (2-3 sentences)
+- Detailed explanation of excluded areas - clearly define what was not tested and why with business context (2-3 sentences)
+- Scope constraints - describe any limitations that affected the assessment (time, access, technical constraints) with implications (2-3 sentences)
+- Potential blind spots - identify areas that may require additional testing or assessment with detailed descriptions (2-3 sentences)
+- Recommendations for expanded testing - suggest areas that could benefit from future assessments with specific examples (2-3 sentences)
+- Risk areas outside scope - explain potential security risks that exist in areas not covered by this assessment with detailed context (2-3 sentences)
+- Limitations impact - describe how these limitations affect the overall security assessment and what they mean for the organization (2-3 sentences)
 
 ## Detailed Findings
 For EACH finding found in the data (Critical, High, Medium, and Low severity), provide COMPREHENSIVE details that thoroughly explain each vulnerability. ${
       request.pentestType === 'aggressive'
-        ? 'For AGGRESSIVE mode: This section should be EXTENSIVE (8-12+ pages) with MAXIMUM detail and BEEFY content. Each finding should be 4-6 paragraphs minimum with extensive technical depth. CRITICAL: The folder contains data from MULTIPLE IP ADDRESSES of the same domain - document findings for EACH IP separately with extensive detail. Create dedicated subsections for each IP address showing port scans, services, vulnerabilities, and exploitation results. For SOFT mode: This section should be COMPREHENSIVE (3-5 pages) with detailed analysis for each finding. Each finding should be 2-3 paragraphs minimum with thorough explanations.'
-        : 'For SOFT mode: This section should be COMPREHENSIVE (3-5 pages) with detailed analysis for each finding. Each finding should be 2-3 paragraphs minimum with thorough explanations, technical details, business impact, and remediation steps. Include ALL findings from the data - do not skip any.'
+        ? 'For AGGRESSIVE mode: This section should be EXTENSIVE (8-12+ pages) with MAXIMUM detail and BEEFY content. Each CRITICAL/HIGH finding should be 6-10 paragraphs minimum (2-3 pages per finding) with extensive technical depth. MANDATORY: EVERY finding MUST include actual exploitation commands in code blocks - commands are NOT optional. Content must be EXTREMELY descriptive - explain every detail of the vulnerability, exploitation process, and impact. CRITICAL: The folder contains data from MULTIPLE IP ADDRESSES of the same domain - document findings for EACH IP separately with extensive detail. Create dedicated subsections for each IP address showing port scans, services, vulnerabilities, and exploitation results with complete command outputs. Show REAL attack scenarios with actual exploitation evidence. For SOFT mode: This section should be COMPREHENSIVE (3-5 pages) with detailed analysis for each finding. Each finding should be 2-3 paragraphs minimum with thorough explanations.'
+        : 'For SOFT mode: This section should be EXTENSIVE and COMPREHENSIVE (5-10+ pages) with MAXIMUM detail and substantial content. Each finding should be 4-6 paragraphs minimum (1-2 pages per finding) with thorough explanations, detailed technical context, comprehensive business impact analysis, and extensive remediation guidance. Include ALL findings from the data - do not skip any. Content must be substantial and provide real value - no brief summaries allowed.'
     }
 
 - For EVERY finding (Critical, High, Medium, Low), include:
 - Vulnerability title and severity level
-- VERY DETAILED description of the vulnerability - explain how it works, why it exists, technical details
+- EXTREMELY DETAILED description of the vulnerability (2-3 paragraphs minimum for aggressive mode) - explain how it works, why it exists, technical details, root cause analysis
 - Risk score and rating justification - explain why this finding received its severity rating
 ${
   request.pentestType === 'aggressive'
-    ? '- CRITICAL FOR MULTI-IP SCENARIOS: Clearly identify which IP address(es) are affected - create separate write-ups for each IP when the same vulnerability appears on different IPs\n- EXTENSIVE exploitability analysis - detailed step-by-step exploitation logic, attack vectors, and attack chains\n- Proof-of-concept descriptions with technical evidence and validation results\n- CVE references with detailed descriptions and CVSS scores where applicable\n- Attack path visualization - explain how an attacker would exploit this, including initial access, execution, persistence, and lateral movement\n- Lateral movement opportunities - how this vulnerability could lead to further compromise of other systems and IPs\n- Validation methodology - explain how the vulnerability was validated through active exploitation\n- IP address and attack surface identification - clearly identify which IP(s) are affected, document open ports, running services, and configurations for EACH IP\n- Network topology considerations - how this finding relates to the overall network architecture and relationships between IPs\n- IP-specific remediation - provide remediation steps tailored to each affected IP address'
+    ? "- MANDATORY: Actual exploitation commands in code blocks - if commands exist in data, include them with COMPLETE outputs. If commands don't exist, describe in detail what commands would be used.\n- CRITICAL FOR MULTI-IP SCENARIOS: Clearly identify which IP address(es) are affected - create separate write-ups for each IP when the same vulnerability appears on different IPs\n- EXTENSIVE exploitability analysis (2-3 paragraphs) - detailed step-by-step exploitation logic, attack vectors, and attack chains\n- Proof-of-concept descriptions with technical evidence and validation results\n- CVE references with detailed descriptions and CVSS scores where applicable\n- Attack path visualization (1-2 paragraphs) - explain how an attacker would exploit this, including initial access, execution, persistence, and lateral movement\n- Lateral movement opportunities - how this vulnerability could lead to further compromise of other systems and IPs\n- Validation methodology - explain how the vulnerability was validated through active exploitation\n- IP address and attack surface identification - clearly identify which IP(s) are affected, document open ports, running services, and configurations for EACH IP\n- Network topology considerations - how this finding relates to the overall network architecture and relationships between IPs\n- IP-specific remediation - provide remediation steps tailored to each affected IP address\n- Complete exploitation narrative - tell the story of how this would be exploited in a real attack scenario"
     : ''
 }
-- COMPREHENSIVE business impact - financial, operational, reputational consequences
+- COMPREHENSIVE business impact (3-4 paragraphs minimum, 12-16 sentences) - detailed financial, operational, reputational consequences with specific examples and context
 - EXTENSIVE technical evidence - include ALL commands, URLs, configurations, code snippets from the data. Format commands and outputs as code blocks using triple backticks. Format structured data (port scans, service lists, IP inventories) as markdown tables.
 - All affected systems and components - be specific about what's impacted. Format as tables when multiple systems are listed.
 - Priority rating and remediation urgency with justification
-- Attack scenarios - explain how an attacker could exploit this
+- Attack scenarios (1-2 paragraphs for aggressive mode) - explain how an attacker would exploit this in detail
 - Current state assessment - what's currently happening
 
 Format each finding as:
 ${findingTitleFormat}
 ${severityFormat}
 ${descriptionFormat}
-${technicalDetailsSection}**Business Impact:** [COMPREHENSIVE business impact - explain financial risks (potential losses, fines), operational risks (service disruption), reputational risks (customer trust, brand damage). INCLUDE URGENCY FRAMING: Add factual statements about exploitation timelines, such as "These vulnerabilities are routinely exploited by automated scanners within days of exposure" or "Similar issues have been exploited within [timeframe] in [industry context]." Create urgency without fear-mongering.]
+${technicalDetailsSection}**Business Impact:** [${
+      request.pentestType === 'aggressive'
+        ? 'COMPREHENSIVE business impact - explain financial risks (potential losses, fines), operational risks (service disruption), reputational risks (customer trust, brand damage). INCLUDE URGENCY FRAMING: Add factual statements about exploitation timelines, such as "These vulnerabilities are routinely exploited by automated scanners within days of exposure" or "Similar issues have been exploited within [timeframe] in [industry context]." Create urgency without fear-mongering.'
+        : `CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS (3-4 paragraphs, 12-16 sentences):
+
+MANDATORY TONE - This must NOT read like a verdict or incident-response conclusion:
+- DO NOT use phrases like "severe risk", "business continuity", "data breaches", "complete system compromise", "attacker could gain full control", "immediate risk", "could lead to", "may lead to unauthorised access and data breaches", "could result in breaches", "will lead to", "causes regulatory issues"
+- DO NOT use language that implies breach or confirmed compromise
+- DO NOT sound like penetration test or incident response output
+
+REQUIRED LANGUAGE STYLE - Make impact statements conditional, forward-looking, and non-absolute:
+- Conditional: "may increase risk over time if left unreviewed" (NOT "will cause" or "could lead to")
+- Forward-looking: "could contribute to elevated risk exposure" (NOT "causes regulatory issues")
+- Non-absolute: "represents an area for security posture improvement" (NOT "could result in breaches")
+
+SPECIFIC GUIDANCE FOR DATABASE EXPOSURE FINDINGS (MySQL/PostgreSQL/etc):
+- DO NOT say: "may lead to unauthorised access and data breaches"
+- DO say: "increases the likelihood of unauthorised access attempts if additional controls are not in place"
+- Preserve urgency without triggering panic: Use conditional language that acknowledges potential risk without confirming compromise
+- Frame as: "If left unreviewed, externally visible database services may increase exposure to potential unauthorized access attempts. This observation warrants review to assess whether additional access controls and network restrictions are appropriate."
+
+GENERAL PREFERRED PHRASING:
+- "If left unreviewed, externally visible misconfigurations and outdated services may increase the likelihood of security incidents over time"
+- "may increase exposure" (NOT "will cause exposure")
+- "could potentially be exploited" (NOT "allows exploitation")
+- "may warrant validation" (NOT "confirms vulnerability")
+- "represents an area for security posture improvement" (NOT "causes business impact")
+
+MINDSET: The tone should be guiding, not judging. Frame as potential risks that may warrant review, not confirmed exploitable vulnerabilities. Focus on visibility and awareness, not declarative business impact. Explain that actual business impact depends on validation and context.`
+    }]
 ${whatWasFoundFormat}
 ${affectedSystemsFormat}
 ${attackSurfaceSection}${riskScenarioFormat}
@@ -665,18 +1346,28 @@ ${howToExploitFormat}
 CRITICAL FORMATTING REQUIREMENTS:
 
 1. CODE BLOCKS - Format ALL commands, terminal output, and code snippets as code blocks:
-\`\`\`
-curl -i -s -k "https://example.com/endpoint"
-\`\`\`
-
-For multi-line terminal output or scripts:
-\`\`\`
-$ smbclient -L //192.168.1.1 -N
-Sharename       Type      Comment
----------       ----      ------
-ROOT            Disk      
-IPC$            IPC       IPC Service
-\`\`\`
+   MANDATORY: Use triple backticks on separate lines. The format MUST be:
+   
+   Start with a line containing only three backticks
+   Then the command or code on the next line
+   Then any output on subsequent lines
+   End with a line containing only three backticks
+   
+   Example for single command:
+   [Line with three backticks]
+   curl -i -s -k "https://example.com/endpoint"
+   [Line with three backticks]
+   
+   Example for multi-line terminal output:
+   [Line with three backticks]
+   $ smbclient -L //192.168.1.1 -N
+   Sharename       Type      Comment
+   ---------       ----      ------
+   ROOT            Disk      
+   IPC$            IPC       IPC Service
+   [Line with three backticks]
+   
+   CRITICAL: The triple backticks MUST be on their own separate lines. DO NOT put them on the same line as the command. This creates the premium black background in the PDF.
 
 2. TABLES - Format ALL structured data as markdown tables. Examples:
 
@@ -717,96 +1408,141 @@ ${
 }Include ALL findings from the data - don't skip any. Be thorough and detailed.
 
 ## Attack Surface Analysis
-Provide COMPREHENSIVE, DETAILED analysis of the attack surface. Each subsection MUST contain at least 6-7 lines of informative content:
+Provide COMPREHENSIVE, DETAILED analysis of the attack surface. Each subsection MUST contain at least 15-20 lines of substantial, detailed content (NOT 6-7 lines). ABSOLUTELY NO ONE-LINERS ALLOWED. Every subsection must have MULTIPLE paragraphs (3-4 paragraphs minimum), each with 4-6 sentences. DO NOT write generic definitions - write SPECIFIC, DETAILED analysis based on THIS assessment's findings.
 
 ### 3.1 Network Topology Overview
-CRITICAL: Write 6-7 lines of ACTUAL network topology analysis based on THIS penetration test's findings. DO NOT write generic definitions. Write SPECIFIC analysis for the client:
-- Actual network architecture observed during THIS test based on the IP addresses and services discovered
-- Specific network segments and relationships identified from THIS test's results
-- Actual network boundaries and security perimeters observed
-- Specific network components discovered during THIS assessment
+CRITICAL: Write 15-20 lines of ACTUAL network topology analysis based on THIS assessment's findings. This MUST be 3-4 paragraphs, each with 4-6 sentences. DO NOT write generic definitions. Write SPECIFIC, DETAILED analysis for the client:
+- Actual network architecture observed during THIS test based on the IP addresses and services discovered (2-3 sentences explaining the architecture)
+- Specific network segments and relationships identified from THIS test's results (2-3 sentences with details)
+- Actual network boundaries and security perimeters observed (2-3 sentences explaining boundaries)
+- Specific network components discovered during THIS assessment (2-3 sentences describing components)
+- Analysis of network topology implications for security posture (2-3 sentences)
+- Recommendations for network architecture improvements (2-3 sentences)
 
 ### 3.2 IP Address Inventory
-Provide 6-7 lines of detailed content:
-- Complete inventory of all IP addresses tested during the assessment
-- Detailed documentation of each IP address with its purpose and role
-- Analysis of IP address distribution and allocation
-- Identification of public-facing vs internal IP addresses
-- Documentation of IP address ownership and management
-- Assessment of IP address exposure and attack surface
-- Recommendations for IP address management and security
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Complete inventory of all IP addresses tested during the assessment with detailed descriptions
+- Detailed documentation of each IP address with its purpose, role, and services running
+- Analysis of IP address distribution, allocation, and organizational structure
+- Identification of public-facing vs internal IP addresses with security implications
+- Documentation of IP address ownership, management, and administrative control
+- Assessment of IP address exposure, attack surface, and potential security risks
+- Recommendations for IP address management, security hardening, and best practices
 
 ### 3.3 Service Enumeration Summary
-Provide 6-7 lines of detailed content:
-- Comprehensive summary of all services discovered during enumeration
-- Detailed documentation of service types, versions, and configurations
-- Analysis of service exposure and accessibility
-- Identification of unnecessary or vulnerable services
-- Assessment of service security configurations
-- Documentation of service dependencies and relationships
-- Recommendations for service hardening and optimization
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Comprehensive summary of all services discovered during enumeration with version details
+- Detailed documentation of service types, versions, configurations, and security settings
+- Analysis of service exposure, accessibility, and potential attack vectors
+- Identification of unnecessary, vulnerable, or misconfigured services
+- Assessment of service security configurations, patch levels, and hardening status
+- Documentation of service dependencies, relationships, and integration points
+- Recommendations for service hardening, optimization, and security improvements
 
 ### 3.4 Port Analysis
-Provide 6-7 lines of detailed content:
-- Comprehensive analysis of all open ports discovered during scanning
-- Detailed documentation of port usage and associated services
-- Identification of unnecessary open ports and services
-- Analysis of port security and access controls
-- Assessment of port exposure and potential attack vectors
-- Documentation of port filtering and firewall rules
-- Recommendations for port security and minimization
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Comprehensive analysis of all open ports discovered during scanning with service mappings
+- Detailed documentation of port usage, associated services, and traffic patterns
+- Identification of unnecessary open ports, services, and potential security gaps
+- Analysis of port security, access controls, and firewall configurations
+- Assessment of port exposure, potential attack vectors, and exploitation risks
+- Documentation of port filtering rules, firewall policies, and network segmentation
+- Recommendations for port security, minimization, and defense-in-depth strategies
 
 ### 3.5 Attack Vector Analysis
-Provide 6-7 lines of detailed content:
-- Comprehensive analysis of potential attack vectors and entry points
-- Detailed documentation of identified attack paths and exploitation routes
-- Analysis of attack surface diversity and complexity
-- Identification of high-risk attack vectors requiring immediate attention
-- Assessment of attack vector likelihood and impact
-- Documentation of attack vector mitigation strategies
-- Recommendations for attack surface reduction
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Comprehensive analysis of potential attack vectors and entry points identified
+- Detailed documentation of identified attack paths, exploitation routes, and methodologies
+- Analysis of attack surface diversity, complexity, and potential impact
+- Identification of high-risk attack vectors requiring immediate attention and prioritization
+- Assessment of attack vector likelihood, impact, and business risk implications
+- Documentation of attack vector mitigation strategies, controls, and countermeasures
+- Recommendations for attack surface reduction, security hardening, and risk mitigation
 
 ### 3.6 Exposure Assessment
-Provide 6-7 lines of detailed content:
-- Comprehensive assessment of infrastructure exposure to external threats
-- Detailed analysis of publicly accessible services and endpoints
-- Identification of overexposed systems and services
-- Assessment of exposure risk and potential impact
-- Documentation of exposure reduction opportunities
-- Analysis of exposure trends and patterns
-- Recommendations for exposure minimization and security hardening
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Comprehensive assessment of infrastructure exposure to external threats and risks
+- Detailed analysis of publicly accessible services, endpoints, and attack surfaces
+- Identification of overexposed systems, services, and potential security vulnerabilities
+- Assessment of exposure risk, potential impact, and business implications
+- Documentation of exposure reduction opportunities, security controls, and best practices
+- Analysis of exposure trends, patterns, and historical security posture changes
+- Recommendations for exposure minimization, security hardening, and continuous improvement
 
 ## Risk Assessment
-Provide COMPREHENSIVE, DETAILED risk assessment. Each subsection MUST contain at least 6-7 lines of informative content:
+Provide COMPREHENSIVE, DETAILED risk assessment. Each subsection MUST contain at least 15-20 lines of substantial, detailed content (NOT 6-7 lines). ABSOLUTELY NO ONE-LINERS ALLOWED. Every subsection must have MULTIPLE paragraphs (3-4 paragraphs minimum), each with 4-6 sentences. Write SPECIFIC, DETAILED analysis based on THIS assessment's findings.
 
 ### 5.1 Risk Matrix
-CRITICAL: Write 6-7 lines of ACTUAL risk matrix based on THIS penetration test's findings. DO NOT write generic definitions. Write SPECIFIC risk analysis for the client:
-- Actual risk matrix showing the findings from THIS test categorized by severity and impact
-- Specific high-risk areas identified from THIS test's actual findings
-- Risk distribution based on the actual vulnerabilities discovered
-- Recommendations based on the actual findings from THIS test
+CRITICAL: Write 15-20 lines of ACTUAL risk matrix based on THIS assessment's findings (3-4 paragraphs, each 4-6 sentences). DO NOT write generic definitions. Write SPECIFIC, DETAILED risk analysis for the client:
+- Actual risk matrix showing the findings from THIS test categorized by severity and impact with detailed explanations
+- Specific high-risk areas identified from THIS test's actual findings with business context
+- Risk distribution based on the actual vulnerabilities discovered with statistical analysis
+- Detailed risk prioritization framework and methodology applied to these findings
+- Risk correlation analysis showing relationships between different findings
+- Recommendations based on the actual findings from THIS test with actionable steps
 
 ### 5.2 Severity Distribution
-Provide 6-7 lines of detailed content:
-- Comprehensive breakdown of findings by severity level (Critical, High, Medium, Low)
-- Detailed analysis of severity distribution patterns and trends
-- Identification of severity concentration areas and systems
-- Assessment of severity impact on overall security posture
-- Documentation of severity-based prioritization strategies
-- Analysis of severity correlation with business impact
-- Recommendations for addressing high-severity findings
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+
+CRITICAL CONSISTENCY REQUIREMENT: This section MUST use the EXACT SAME counts as the findings listed in Section 4 (Detailed Findings). If Section 4 lists findings (e.g., "2 Critical observations", "4 High observations", "3 Medium observations", "2 Low observations"), then this section MUST reflect those EXACT numbers. DO NOT show "0" or "No findings" if findings are listed elsewhere in the report.
+
+- Comprehensive breakdown of findings by severity level using the ACTUAL counts from Section 4 (Detailed Findings) - COUNT the findings in Section 4 FIRST, then use those EXACT counts here with detailed counts and percentages (2-3 sentences)
+- Detailed analysis of severity distribution patterns, trends, and statistical insights based on the ACTUAL findings from this scan (2-3 sentences)
+- Identification of severity concentration areas, systems, and infrastructure components from the ACTUAL findings (2-3 sentences)
+- Assessment of severity impact on overall security posture with business implications based on the ACTUAL findings (2-3 sentences)
+- Documentation of severity-based prioritization strategies and remediation approaches for the ACTUAL findings (2-3 sentences)
+- Analysis of severity correlation with business impact, operational risk, and financial exposure based on the ACTUAL findings (2-3 sentences)
+- Recommendations for addressing findings with specific action items and timelines based on the ACTUAL findings (2-3 sentences)
+
+MANDATORY: Create a table showing the ACTUAL counts from Section 4. COUNT the findings in Section 4 FIRST, then create this table:
+| Observation Level | Count |
+|-------------------|-------|
+| High | [COUNT findings in Section 4 - use EXACT number] |
+| Medium | [COUNT findings in Section 4 - use EXACT number] |
+| Low | [COUNT findings in Section 4 - use EXACT number] |
+| Total | [SUM of High + Medium + Low from Section 4] |
+
+CRITICAL: The Total MUST equal the sum of High + Medium + Low. If Section 4 has 1 High + 5 Medium + 2 Low = 8 Total, this table MUST show exactly that. If Section 4 shows 10 total findings, this table MUST show 10 total. The counts MUST match Section 4 exactly - there can be NO discrepancies.
+
+If no findings exist in a category, you may show 0, but ONLY if Section 4 also shows no findings in that category.
 
 ### 5.3 Business Impact Analysis
-Provide 6-7 lines of detailed content:
-- Comprehensive analysis of business impact for each finding category
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+${
+  request.pentestType === 'soft'
+    ? `CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS (15-20 lines, 3-4 paragraphs, each 4-6 sentences):
+
+MANDATORY TONE REQUIREMENTS - This section must NOT read like a verdict or incident-response conclusion:
+- DO NOT use phrases like "severe risk", "business continuity", "data breaches", "complete system compromise", "attacker could", "could lead to", "may lead to unauthorised access and data breaches", "could result in breaches", "will lead to", "causes regulatory issues"
+- DO NOT use language that implies breach or confirmed compromise
+- DO NOT sound like penetration test or incident response output
+- DO NOT imply outcomes rather than potential risk
+
+REQUIRED LANGUAGE STYLE - Make impact statements:
+- Conditional: "may increase risk over time if left unreviewed" (2-3 sentences)
+- Forward-looking: "could contribute to elevated risk exposure" (2-3 sentences)
+- Non-absolute: "represents an area for security posture improvement" (2-3 sentences)
+
+PREFERRED PHRASING EXAMPLES:
+- "increases the likelihood of unauthorised access attempts if additional controls are not in place" (NOT "may lead to unauthorised access and data breaches")
+- "may increase risk over time if left unreviewed" (NOT "could result in breaches")
+- "could contribute to elevated risk exposure" (NOT "will lead to")
+- "represents an area for security posture improvement" (NOT "causes regulatory issues")
+
+MINDSET: The tone should be guiding, not judging. Frame as potential impact that warrants validation, not confirmed business risk. Focus on visibility and awareness, not declarative business impact statements. Explain that actual business impact depends on validation and context. Frame findings as opportunities to strengthen security posture.`
+    : `- Comprehensive analysis of business impact for each finding category
 - Detailed assessment of financial, operational, and reputational risks
 - Identification of critical business processes at risk
 - Analysis of potential business disruption scenarios
 - Documentation of business impact quantification and measurement
 - Assessment of business continuity and recovery implications
-- Recommendations for business impact mitigation
+- Recommendations for business impact mitigation`
+}
 
-### 5.4 Compliance Impact
+${
+  request.pentestType === 'soft'
+    ? ''
+    : `### 5.4 Compliance Impact
 Provide 6-7 lines of detailed content:
 - Comprehensive analysis of compliance implications for identified findings
 - Detailed assessment of regulatory requirements (PCI-DSS, GDPR, HIPAA, etc.)
@@ -815,32 +1551,143 @@ Provide 6-7 lines of detailed content:
 - Documentation of compliance remediation requirements
 - Assessment of compliance monitoring and reporting needs
 - Recommendations for compliance improvement and maintenance
+`
+}
 
 ### 5.5 Risk Prioritization
-Provide 6-7 lines of detailed content:
-- Comprehensive risk prioritization framework and methodology
-- Detailed explanation of prioritization criteria and scoring
-- Analysis of risk prioritization results and rankings
-- Identification of top-priority risks requiring immediate action
-- Documentation of prioritization rationale and justification
-- Assessment of resource allocation based on prioritization
-- Recommendations for risk prioritization implementation
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+- Comprehensive risk prioritization framework and methodology with detailed explanations (2-3 sentences)
+- Detailed explanation of prioritization criteria and scoring with specific examples (2-3 sentences)
+- Analysis of risk prioritization results and rankings with business context (2-3 sentences)
+- Identification of top-priority risks requiring immediate action with detailed descriptions (2-3 sentences)
+- Documentation of prioritization rationale and justification with comprehensive explanations (2-3 sentences)
+- Assessment of resource allocation based on prioritization with specific recommendations (2-3 sentences)
+- Recommendations for risk prioritization implementation with actionable steps (2-3 sentences)
 
 ### 5.6 Risk Trend Analysis
-Provide 6-7 lines of detailed content:
-- Comprehensive analysis of risk trends and patterns over time
-- Detailed assessment of risk evolution and changes
-- Identification of emerging risks and threat vectors
-- Analysis of risk trend implications for security posture
-- Documentation of risk trend monitoring and tracking
-- Assessment of risk trend correlation with business changes
-- Recommendations for proactive risk management
+Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+${
+  request.pentestType === 'soft'
+    ? `CRITICAL REQUIREMENTS FOR VULNERABILITY SCANS (15-20 lines, 3-4 paragraphs, each 4-6 sentences):
 
-## Recommendations and Next Steps
-CRITICAL: This section is MANDATORY and must ALWAYS be included. Provide COMPREHENSIVE, DETAILED actionable guidance. Each subsection MUST contain at least 6-7 lines of informative content:
+MANDATORY: DO NOT show "Total Vulnerabilities: 0" or any numeric charts showing zero values when findings exist. This creates factual inconsistency and undermines credibility.
 
-### 6.1 Immediate Actions
-CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions or brief descriptions. Write EXTENSIVE, SPECIFIC content that explains:
+CRITICAL CONSISTENCY REQUIREMENT - SECTION 4 IS THE SOURCE OF TRUTH:
+- This section MUST use the EXACT SAME counts as Section 4 (Detailed Findings)
+- BEFORE writing this section, COUNT the findings in Section 4:
+  * How many High observations are listed in Section 4? Use that EXACT number
+  * How many Medium observations are listed in Section 4? Use that EXACT number
+  * How many Low observations are listed in Section 4? Use that EXACT number
+  * What is the TOTAL count in Section 4? Use that EXACT total
+- If Section 4 lists findings (e.g., "1 High, 5 Medium, 2 Low = 8 total"), then this section MUST reflect those EXACT numbers
+- DO NOT show "0" or "No findings" if findings are listed in Section 4
+- DO NOT create charts showing zeros when Section 4 has actual findings
+
+CHART/GRAPH MANDATORY REQUIREMENTS - ABSOLUTE PROHIBITION ON ZEROS:
+🚨 CRITICAL: If Section 4 has findings, you MUST NOT generate any chart, graph, or visual representation showing zeros. This is ABSOLUTELY PROHIBITED.
+
+- If Section 4 lists findings (e.g., "3 High, 4 Medium, 1 Low = 8 total"), then:
+  * DO NOT create a chart showing "0" for any category
+  * DO NOT show "Total Vulnerabilities: 0"
+  * DO NOT show "0.0%" for any category
+  * The chart MUST use EXACT counts from Section 4
+  
+- If you create a "Severity Distribution Overview" chart or any visual:
+  * FIRST: Count the findings in Section 4
+  * SECOND: Use EXACT counts from Section 4: High=[EXACT count from Section 4], Medium=[EXACT count from Section 4], Low=[EXACT count from Section 4]
+  * THIRD: Calculate percentages: High % = (High count / Total) × 100, Medium % = (Medium count / Total) × 100, Low % = (Low count / Total) × 100
+  * FOURTH: Show "Total Vulnerabilities: [ACTUAL TOTAL from Section 4]" - if Section 4 has 8 total, show "8" not "0"
+  
+- EXAMPLE: If Section 4 has 3 High, 4 Medium, 1 Low = 8 Total, the chart MUST show:
+  * Critical: 0 (0.0%) - only if Section 4 has no Critical findings
+  * High: 3 (37.5%) - EXACT count from Section 4
+  * Medium: 4 (50.0%) - EXACT count from Section 4
+  * Low: 1 (12.5%) - EXACT count from Section 4
+  * Total: 8 - EXACT total from Section 4
+  
+- ABSOLUTE RULE: If Section 4 has ANY findings, the chart MUST reflect those findings. DO NOT show all zeros (0, 0.0%) when Section 4 has actual findings. This creates a critical inconsistency that undermines the entire report.
+
+CHOOSE ONE APPROACH:
+1. Reframe as baseline assessment: Explicitly state that this is a baseline assessment and that trend tracking will occur over time with future scans. Use the ACTUAL counts from Section 4 when establishing the baseline. For example: "This baseline assessment identified [EXACT count from Section 4] High observations, [EXACT count from Section 4] Medium observations, and [EXACT count from Section 4] Low observations (Total: [EXACT TOTAL from Section 4]). Future scans will track changes from this baseline." If you mention a chart, it MUST show the ACTUAL counts from Section 4 - DO NOT describe a chart showing zeros. (2-3 sentences)
+2. OR remove numeric chart entirely: Replace any numeric charts with a short explanatory paragraph indicating that trend data requires historical scans over multiple assessment periods. Reference the ACTUAL findings from Section 4: "This scan identified [EXACT count from Section 4] High observations, [EXACT count from Section 4] Medium observations, and [EXACT count from Section 4] Low observations (Total: [EXACT TOTAL from Section 4]). Trend analysis requires multiple scans over time to identify patterns." DO NOT mention or describe any chart that shows zeros. (2-3 sentences)
+
+MANDATORY: If you include any statistics, counts, or charts in this section, they MUST match Section 4 exactly. There can be NO contradictions. The chart MUST be dynamic based on Section 4's actual findings.
+
+🚨 ABSOLUTE PROHIBITION: DO NOT describe, mention, or create any chart, graph, or visual that shows "0" or "0.0%" for any category if Section 4 has findings in that category. If Section 4 shows "3 High, 4 Medium, 1 Low = 8 Total", then any chart description MUST show those EXACT numbers, not zeros. If you cannot ensure the chart matches Section 4 exactly, DO NOT include a chart description at all.
+
+ADDITIONAL LANGUAGE REQUIREMENTS:
+- DO NOT frame trends as "increasing risk" - frame as "visibility over time" (2-3 sentences explaining this approach)
+- Explain how scan results provide visibility into external exposure patterns with detailed examples (2-3 sentences)
+- Focus on observation trends, not risk escalation with comprehensive analysis (2-3 sentences)
+- Use language like "scan visibility shows", "observations indicate", "patterns suggest" with specific context (2-3 sentences)
+- Frame as monitoring and awareness, not risk assessment with detailed explanations (2-3 sentences)
+- Explain how regular scanning provides ongoing visibility with business value (2-3 sentences)
+- Focus on trend visibility, not risk trends with actionable insights (2-3 sentences)`
+    : `- Comprehensive analysis of risk trends and patterns over time with detailed explanations (2-3 sentences)
+- Detailed assessment of risk evolution and changes with specific examples (2-3 sentences)
+- Identification of emerging risks and threat vectors with detailed descriptions (2-3 sentences)
+- Analysis of risk trend implications for security posture with business context (2-3 sentences)
+- Documentation of risk trend monitoring and tracking with comprehensive details (2-3 sentences)
+- Assessment of risk trend correlation with business changes with specific examples (2-3 sentences)
+- Recommendations for proactive risk management with actionable steps (2-3 sentences)`
+}
+
+## ${
+      request.pentestType === 'soft'
+        ? 'Recommended Next Steps'
+        : 'Recommendations and Next Steps'
+    }
+🚨 CRITICAL: This section is MANDATORY and must ALWAYS be included. ALL subsections (6.1, 6.2, 6.3, 6.4, 6.5, 6.6) are COMPULSORY and CAN NEVER BE EMPTY. Provide COMPREHENSIVE, DETAILED actionable guidance. 
+
+ABSOLUTE REQUIREMENT: NO ONE-LINERS ALLOWED. Every subsection MUST contain:
+- Minimum 20-25 lines of substantial content (NOT 6-7, but 20-25)
+- Multiple paragraphs (at least 3-4 paragraphs per subsection)
+- Each paragraph: 3-5 sentences minimum
+- Detailed explanations, not just bullet points
+- Specific examples and actionable steps
+- Business impact and value explanations
+
+Each subsection structure:
+1. Context paragraph (3-5 sentences explaining the situation)
+2. Detailed explanation paragraph (3-5 sentences with specifics)
+3. Actionable steps paragraph (3-5 sentences with how-to details)
+4. Business impact paragraph (3-5 sentences on why it matters)
+5. Value proposition paragraph (2-3 sentences on benefits)
+
+### 6.1 ${
+      request.pentestType === 'soft'
+        ? 'Short-Term (Good Practice)'
+        : 'Immediate Actions'
+    }
+🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. ABSOLUTELY NO ONE-LINERS ALLOWED. Every paragraph must be 3-5 sentences minimum. DO NOT write generic definitions or brief descriptions. Write EXTENSIVE, SPECIFIC content that explains:
+${
+  request.pentestType === 'soft'
+    ? `For vulnerability scans, this section should focus on good practice recommendations:
+1. Review publicly exposed services and versions (5-7 lines):
+   - Explain why reviewing exposed services matters to ${domainName}${companyNameSuffix}
+   - Provide specific guidance on how to review service versions
+   - Explain what to look for and why it's important
+   - Reference any specific services or versions identified in the scan${companyNameSuffix}
+
+2. Apply standard web security headers (5-7 lines):
+   - Explain which security headers should be implemented (X-Frame-Options, X-Content-Type-Options, Content-Security-Policy, etc.)
+   - Explain why each header matters and what it protects against${companyNameSuffix}
+   - Provide guidance on how to implement these headers
+   - Reference any specific web services from the scan that would benefit${companyNameSuffix}
+
+3. Restrict access to management interfaces where possible (5-7 lines):
+   - Explain why restricting management interfaces is important${companyNameSuffix}
+   - Provide guidance on how to restrict access (IP whitelisting, VPN, authentication)
+   - Reference any management interfaces identified in the scan${companyNameSuffix}
+   - Explain the balance between accessibility and security${companyNameSuffix}`
+    : ''
+}
+
+BAD EXAMPLE (DO NOT DO THIS):
+"Implement firewall rules to restrict database access, secure backup directories, and deploy emergency monitoring for unauthorised access attempts within 48 hours."
+
+GOOD EXAMPLE (DO THIS):
+"The penetration test identified critical vulnerabilities that require immediate attention within 48 hours to prevent potential data breaches. Specifically, the database server at [IP address] was found to be accessible from unauthorized networks, which could allow attackers to exfiltrate sensitive customer data. To address this, ${domainName} must implement strict firewall rules that restrict database access to only authorized application servers and administrative networks. Additionally, the backup directories on [system name] were discovered to be world-readable, potentially exposing sensitive backup files containing customer information. These directories must be secured with proper access controls immediately. Emergency monitoring should also be deployed to detect any unauthorized access attempts, with alerts configured to notify the security team in real-time. The implementation of these measures will significantly reduce the risk of data exposure and provide ${domainName} with immediate visibility into potential security incidents."
 
 1. ACTUAL IMMEDIATE THREATS (5-7 lines minimum):
    - List EVERY critical finding from THIS test that requires immediate action (within 7 days)
@@ -864,8 +1711,38 @@ CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of 
    - Explain how fixing these will improve ${domainName}'s security posture
    - Create urgency with factual statements about exploitation timelines
 
-### 6.2 Short-term Remediation
-CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+### 6.2 ${
+      request.pentestType === 'soft'
+        ? 'Optional Validation'
+        : 'Short-term Remediation'
+    }
+🚨 CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. ABSOLUTELY NO ONE-LINERS ALLOWED. Every paragraph must be 3-5 sentences minimum. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+${
+  request.pentestType === 'soft'
+    ? `For vulnerability scans, this section should explain optional validation options:
+1. Introduction (3-4 lines):
+   - Explain that for organisations requiring greater certainty, deeper testing is available${companyNameSuffix}
+   - Frame this as an optional next step, not a requirement${companyNameSuffix}
+   - Explain the difference between a vulnerability scan and a full penetration test${companyNameSuffix}
+
+2. Full Penetration Test Option (5-7 lines):
+   - Explain that a full penetration test can validate exploitability${companyNameSuffix}
+   - Describe what a full penetration test includes (exploit-based testing, real-world risk assessment)${companyNameSuffix}
+   - Explain how results can be mapped to business impact${companyNameSuffix}
+   - Explain when a full penetration test might be appropriate${companyNameSuffix}
+
+3. Bridge to Sales (3-4 lines):
+   - Explain that this scan highlights areas worth validating${companyNameSuffix}
+   - Position full penetration testing as a natural next step for organisations requiring higher confidence${companyNameSuffix}
+   - Explain the value proposition of deeper testing${companyNameSuffix}`
+    : ''
+}
+
+BAD EXAMPLE (DO NOT DO THIS):
+"Isolate development environments, disable WordPress user enumeration, and implement basic security headers within 30 days to reduce risk exposure."
+
+GOOD EXAMPLE (DO THIS):
+"The assessment revealed several high and medium-severity vulnerabilities that should be addressed within the next 30 days to reduce ${domainName}'s attack surface. The development environment at [URL/IP] was found to be accessible from the public internet, which poses a significant risk as it may contain test data, credentials, or code that could be exploited by attackers. This environment must be isolated behind a VPN or restricted to internal networks only, with proper authentication mechanisms in place. Additionally, WordPress user enumeration was discovered on [URL], allowing attackers to identify valid usernames through predictable URL patterns. This functionality should be disabled through WordPress configuration or security plugins to prevent username harvesting attacks. Basic security headers such as X-Frame-Options, X-Content-Type-Options, and Content-Security-Policy should also be implemented across all web applications to prevent clickjacking, MIME-type sniffing, and cross-site scripting attacks. These measures, when implemented together, will significantly reduce ${domainName}'s exposure to common web application attacks and improve overall security posture."
 
 1. ACTUAL SHORT-TERM VULNERABILITIES (5-7 lines minimum):
    - List EVERY high and medium finding from THIS test that needs remediation within 30 days
@@ -889,8 +1766,39 @@ CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of 
    - Explain how this reduces ${domainName}'s risk exposure
    - Quantify the value of remediation (risk reduction, compliance improvement)
 
-### 6.3 Long-term Improvements
-CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+### 6.3 ${
+      request.pentestType === 'soft'
+        ? 'How This Scan Is Best Used'
+        : 'Long-term Improvements'
+    }
+🚨 CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. ABSOLUTELY NO ONE-LINERS ALLOWED. Every paragraph must be 3-5 sentences minimum. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+${
+  request.pentestType === 'soft'
+    ? `For vulnerability scans, this section should explain how to best use the scan results:
+1. First Step in Security Journey (5-7 lines):
+   - Explain that this vulnerability scan is intended to act as a first step${companyNameSuffix}
+   - Explain how it helps identify potential areas of interest${companyNameSuffix}
+   - Explain how it supports internal or external security discussions${companyNameSuffix}
+   - Explain how it informs whether deeper testing is required${companyNameSuffix}
+
+2. Regular Monitoring Tool (5-7 lines):
+   - Explain that many organisations run scans like this regularly${companyNameSuffix}
+   - Explain how they use them as a low-risk way to maintain visibility over external exposure${companyNameSuffix}
+   - Explain the value of regular scanning for security hygiene${companyNameSuffix}
+   - Provide guidance on recommended scanning frequency${companyNameSuffix}
+
+3. Conversation Starter (3-4 lines):
+   - Explain how this scan can start important security conversations${companyNameSuffix}
+   - Explain how it helps prioritise security investments${companyNameSuffix}
+   - Explain how it supports decision-making about deeper testing${companyNameSuffix}`
+    : ''
+}
+
+BAD EXAMPLE (DO NOT DO THIS):
+"Develop a comprehensive security strategy, including regular vulnerability assessments, security awareness training, and incident response planning."
+
+GOOD EXAMPLE (DO THIS):
+"Based on the patterns identified during this penetration test, ${domainName} should develop a comprehensive security strategy that addresses root causes and prevents similar vulnerabilities from emerging in the future. The assessment revealed that many vulnerabilities stemmed from lack of security awareness during development and deployment processes, indicating a need for structured security training programs. A comprehensive security strategy should include regular vulnerability assessments conducted quarterly or after significant infrastructure changes, ensuring that new vulnerabilities are identified and addressed promptly. Security awareness training should be mandatory for all development and operations staff, covering secure coding practices, common vulnerability patterns, and incident response procedures. Additionally, an incident response plan should be developed and tested regularly, with clearly defined roles, communication procedures, and escalation paths. This long-term approach will help ${domainName} build a security-first culture, reduce the likelihood of introducing new vulnerabilities, and ensure rapid response to security incidents when they occur."
 
 1. STRATEGIC IMPROVEMENTS BASED ON ACTUAL FINDINGS (5-7 lines minimum):
    - Identify patterns and root causes from THIS test's findings
@@ -913,21 +1821,25 @@ CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of 
    - Quantify long-term benefits (reduced breach risk, compliance, customer trust)
 
 ### 6.4 Remediation Priority Matrix
-CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 20-25 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
 
-FORMAT REQUIREMENT (MANDATORY): Format this section using card-style boxes. Start with an introductory sentence, then list priorities in card format. This exact format is REQUIRED:
+FORMAT REQUIREMENT (MANDATORY): Format this section using card-style boxes. Start with an introductory paragraph (3-4 sentences), then list priorities in card format. This exact format is REQUIRED:
 
-The matrix outlines the prioritisation of remedial actions based on severity and impact:
+The matrix outlines the prioritisation of remedial actions based on severity and impact for ${domainName}${companyNameSuffix}. This prioritisation framework helps ${domainName} allocate resources effectively and address the most critical security observations first${companyNameSuffix}. The following sections break down findings by priority level, with specific recommendations for each category${companyNameSuffix}.
 
-**Critical (0-7 days):** [List specific critical findings from THIS test that need immediate action - use bullet points with actual finding names]
+**Critical (0-7 days):** 
+[List specific critical findings from THIS test that need immediate action - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no critical findings exist, you MUST still include this section with: "- No critical findings identified in this scan. However, any critical findings discovered in future scans should be addressed within 0-7 days." Then add 1-2 additional bullet points explaining what types of issues would be considered critical and why immediate action is important${companyNameSuffix}.]
 
-**High (1-4 weeks):** [List specific high-severity findings from THIS test - use bullet points with actual finding names]
+**High (1-4 weeks):** 
+[List specific high-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no high findings exist, you MUST still include this section with: "- No high-severity findings identified in this scan. High-severity findings typically include issues that could potentially lead to unauthorized access or data exposure if left unaddressed." Then add 1-2 additional bullet points explaining the importance of addressing high-severity findings promptly${companyNameSuffix}.]
 
-**Medium (1-3 months):** [List specific medium-severity findings from THIS test - use bullet points with actual finding names]
+**Medium (1-3 months):** 
+[List specific medium-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no medium findings exist, you MUST still include this section with: "- No medium-severity findings identified in this scan. Medium-severity findings typically include configuration issues and best practice recommendations." Then add 1-2 additional bullet points explaining medium-severity findings and their typical remediation timeline${companyNameSuffix}.]
 
-**Low (3-12 months):** [List specific low-severity findings from THIS test - use bullet points with actual finding names]
+**Low (3-12 months):** 
+[List specific low-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no low findings exist, you MUST still include this section with: "- No low-severity findings identified in this scan. Low-severity findings typically include informational observations and minor configuration improvements." Then add 1-2 additional bullet points explaining low-severity findings and their place in a comprehensive security program${companyNameSuffix}.]
 
-For each priority level, reference ACTUAL findings from THIS test by name. Do NOT use generic examples.
+CRITICAL: For each priority level, you MUST reference ACTUAL findings from THIS test by name using bullet points (starting with "-"). If no findings exist in a category, you MUST still provide AT LEAST 2-3 bullet points explaining what that category means and why it's important. NEVER leave a priority level empty or with just a heading. ALWAYS provide bullet points for every priority level.
 1. PRIORITY MATRIX WITH ACTUAL FINDINGS (8-10 lines minimum):
    - Create a COMPREHENSIVE priority matrix showing ALL findings from THIS test:
      * Critical findings requiring immediate action (0-7 days) - list each by name
@@ -954,30 +1866,34 @@ For each priority level, reference ACTUAL findings from THIS test by name. Do NO
    - Show how this protects ${domainName}'s most critical assets first
 
 ### 6.5 Implementation Roadmap
-CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 20-25 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
 
-FORMAT REQUIREMENT: Format this section using card-style boxes with checkmarks. Use this exact structure (this format is MANDATORY):
+FORMAT REQUIREMENT: Format this section using card-style boxes with checkmarks. Start with an introductory paragraph (3-4 sentences), then use this exact structure (this format is MANDATORY):
+
+This implementation roadmap provides ${domainName} with a structured approach to addressing the security observations identified in this vulnerability scan${companyNameSuffix}. The roadmap is organized into short-term actions (weeks 1-4) and optional long-term improvements (3-12 months)${companyNameSuffix}. This phased approach allows ${domainName} to address immediate concerns while building toward a more comprehensive security posture${companyNameSuffix}.
 
 **WEEKS 1-2:**
-- [Specific action item 1 based on actual findings]
-- [Specific action item 2 based on actual findings]
-- [Specific action item 3 based on actual findings]
+- [Specific action item 1 based on actual findings - reference by name]
+- [Specific action item 2 based on actual findings - reference by name]
+- [Specific action item 3 based on actual findings - reference by name]
+- [If fewer than 3 findings exist, add: "Review and validate all findings from this scan to confirm their relevance and risk in context${companyNameSuffix}."]
 
 **WEEKS 3-4:**
-- [Specific action item 1 based on actual findings]
-- [Specific action item 2 based on actual findings]
-- [Specific action item 3 based on actual findings]
+- [Specific action item 1 based on actual findings - reference by name]
+- [Specific action item 2 based on actual findings - reference by name]
+- [Specific action item 3 based on actual findings - reference by name]
+- [If fewer than 3 findings exist, add: "Implement standard web security headers and best practices across all web services${companyNameSuffix}."]
 
 **3-12 Month Security Maturity Roadmap (Optional):**
-If desired, ${domainName} can implement a longer-term resilience programme:
+If desired, ${domainName} can implement a longer-term resilience programme${companyNameSuffix}:
 
-- [Long-term improvement 1 based on actual findings]
-- [Long-term improvement 2 based on actual findings]
-- [Long-term improvement 3 based on actual findings]
-- [Long-term improvement 4 based on actual findings]
-- [Long-term improvement 5 based on actual findings]
+- [Long-term improvement 1 based on actual findings - reference specific patterns or themes from findings]
+- [Long-term improvement 2 based on actual findings - reference specific patterns or themes from findings]
+- [Long-term improvement 3 based on actual findings - reference specific patterns or themes from findings]
+- [If fewer findings exist, add: "Establish regular vulnerability scanning schedule to maintain visibility over external exposure${companyNameSuffix}."]
+- [If fewer findings exist, add: "Develop security awareness training program for development and operations teams${companyNameSuffix}."]
 
-Reference ACTUAL findings from THIS test. Do NOT use generic examples.
+CRITICAL: You MUST reference ACTUAL findings from THIS test. If findings are limited, you MUST still provide actionable recommendations based on common security best practices and the types of observations typically found in external vulnerability scans. NEVER leave this section empty. ALWAYS provide at least 3-4 action items for each time period, even if some are general best practices based on the scan type.
 
 1. DETAILED IMPLEMENTATION TIMELINE (8-10 lines minimum):
    - Create a COMPREHENSIVE roadmap based on ACTUAL findings from THIS test:
@@ -1005,7 +1921,7 @@ Reference ACTUAL findings from THIS test. Do NOT use generic examples.
    - Show how this roadmap helps ${domainName} achieve security goals
 
 ### 6.6 Success Metrics
-CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
+🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 15-20 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
 
 1. SPECIFIC SUCCESS METRICS (8-10 lines minimum):
    - Define DETAILED metrics tied to ACTUAL findings from THIS test:
@@ -1103,10 +2019,16 @@ CRITICAL CONTENT REQUIREMENT: This section MUST contain AT LEAST 25-30 lines of 
 - EXTENSIVE technical references and CVEs - for each applicable finding, provide:
   * CVE identifier and full name
   * Detailed description of the vulnerability
-  * CVSS score and vector string
-  * Affected software versions
-  * Exploitation complexity
-  * References to official advisories and documentation
+  ${
+    request.pentestType === 'soft'
+      ? `* CRITICAL FOR SOFT SCANS - CVE LANGUAGE REQUIREMENTS:
+  - For OpenSSH CVE-2024-6387 (regreSSHion) or similar CVEs: DO NOT say "allows unauthenticated remote code execution", "attacker could gain full control", "immediate risk", "system is at risk of total compromise"
+  - Instead say: "A publicly disclosed OpenSSH vulnerability (CVE-2024-6387) was detected based on service version identification. This scan does not attempt exploitation. Exploitability depends on runtime configuration and patch levels. Further validation is recommended to confirm exposure and assess real-world risk."
+  - For any CVE: State that a version associated with the CVE was observed, explicitly say exploitability depends on runtime config, remove "full control" language, remove "immediate" language
+  - Use "Warrants validation" not "System is at risk of total compromise"
+  - Frame as: "A version associated with [CVE number] was observed. This scan identified the version but did not attempt exploitation. Further validation is recommended to confirm exposure and assess real-world risk."`
+      : '* CVSS score and vector string\n  * Affected software versions\n  * Exploitation complexity\n  * References to official advisories and documentation'
+  }
 - COMPREHENSIVE industry-standard frameworks alignment - provide DETAILED mapping:
   * OWASP Top 10 mapping - explain how each finding maps to OWASP categories with specific references
   * NIST Cybersecurity Framework alignment - map findings to NIST controls and functions
@@ -1176,6 +2098,27 @@ CRITICAL: Each appendix subsection (7.1, 7.2, 7.3, 7.4) MUST be SUBSTANTIAL with
 
 CRITICAL: DO NOT include placeholder text, empty sections, or generic statements like "[Contact information]" or "[To be added]". ONLY include sections where you have real, specific information to provide.
 
+${
+  request.pentestType === 'soft'
+    ? `## Closing Note
+🚨 CRITICAL MANDATORY SECTION: This section MUST be the LAST section in the report (after all Appendix sections). This section MUST contain AT LEAST 10-12 lines of substantial, professional content. THIS SECTION CAN NEVER BE EMPTY.
+
+Security is an ongoing process${companyNameSuffix}. This vulnerability scan provides a snapshot in time based on external observation only${companyNameSuffix}. The findings presented in this report represent potential security exposures that were identified through non-intrusive external scanning techniques${companyNameSuffix}.
+
+It is important to understand that this scan does not attempt to exploit vulnerabilities or confirm their exploitability in your specific environment${companyNameSuffix}. Further validation may be required to assess the real-world risk and business impact of any observations highlighted in this report${companyNameSuffix}.
+
+If you would like support validating or addressing any of the observations highlighted in this report, ${
+        companyName ? companyName.replace('.com', '') : 'Onecom'
+      } can guide you through appropriate next steps${companyNameSuffix}. For organisations requiring greater certainty about exploitability and business impact, a full penetration test can provide deeper validation and testing${companyNameSuffix}.
+
+This scan is intended to act as a first step in your security journey - identifying potential areas of interest, supporting internal or external security discussions, and informing whether deeper testing is required${companyNameSuffix}. Many organisations run scans like this regularly, using them as a low-risk way to maintain visibility over external exposure${companyNameSuffix}.
+
+${companyNameSuffix}
+
+`
+    : ''
+}
+
 CRITICAL OUTPUT FORMAT:
 - Start with a special "## Table of Contents" section that lists ALL sections and subsections with page numbers
 - After Table of Contents, start with "## Executive Summary"
@@ -1183,10 +2126,21 @@ CRITICAL OUTPUT FORMAT:
 - Add proper spacing between sections (blank lines)
 
 MANDATORY SECTIONS THAT MUST ALWAYS BE INCLUDED (DO NOT SKIP):
+🚨 CRITICAL: ALL sections listed in the Table of Contents are MANDATORY and MUST be included with substantial content. NO section can be skipped or left empty.
+
+Specifically, these sections are ABSOLUTELY CRITICAL and must NEVER be empty:
+- ALL Executive Summary subsections (1.1, 1.2, 1.3, 1.4, etc.)
+- ALL Recommendations subsections (6.1, 6.2, 6.3, 6.4, 6.5, 6.6) - EVERY ONE is mandatory
 - 6.4 Remediation Priority Matrix (MUST be included in every report, MUST use card format with **Critical (0-7 days):**, **High (1-4 weeks):**, **Medium (1-3 months):**, **Low (3-12 months):**)
 - 6.5 Implementation Roadmap (MUST be included in every report, MUST use card format with **WEEKS 1-2:**, **WEEKS 3-4:**, and **3-12 Month Security Maturity Roadmap**)
+- ALL Appendix subsections (7.1, 7.2, 7.3, 7.4)
+${
+  request.pentestType === 'soft'
+    ? '- 8. Closing Note (MUST be the LAST section, after all Appendix sections)'
+    : ''
+}
 
-These sections are CRITICAL for clients and must be present in EVERY SINGLE REPORT. Do NOT skip them under any circumstances. They provide essential value to the client.
+These sections are CRITICAL for clients and must be present in EVERY SINGLE REPORT with substantial content. Do NOT skip them under any circumstances. They provide essential value to the client. If a section appears empty or minimal, you MUST expand it with relevant content.
 - Use bullet points (-) for lists to make content scannable
 - Format findings clearly with proper headings and paragraphs
 - USE markdown tables for structured data (glossary, pentest types comparison, etc.) with | delimiters
@@ -1391,27 +2345,47 @@ CRITICAL STRUCTURE AND CONTENT VERIFICATION:
       'characters'
     )
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(apiRequestBody),
-    })
+    // Add timeout and better error handling for large requests
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minute timeout
 
-    if (!response.ok) {
-      console.error('\n--- API ERROR ---')
-      console.error('Status:', response.status, response.statusText)
-      const errorData = await response.json().catch(() => ({}))
-      console.error('Error response:', errorData)
-      const errorMessage =
-        errorData.error?.message || `API error: ${response.statusText}`
-      console.error('Error message:', errorMessage)
-      return {
-        success: false,
-        error: errorMessage,
+    let response: Response
+    try {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(apiRequestBody),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId) // Clear timeout on success
+
+      if (!response.ok) {
+        console.error('\n--- API ERROR ---')
+        console.error('Status:', response.status, response.statusText)
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Error response:', errorData)
+        const errorMessage =
+          errorData.error?.message || `API error: ${response.statusText}`
+        console.error('Error message:', errorMessage)
+        return {
+          success: false,
+          error: errorMessage,
+        }
       }
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        console.error('Request timed out after 5 minutes')
+        return {
+          success: false,
+          error:
+            'Request timed out. The content may be too large. Please try with fewer files or contact support.',
+        }
+      }
+      throw fetchError // Re-throw other errors
     }
 
     console.log('\n--- API RESPONSE RECEIVED ---')
