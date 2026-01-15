@@ -25,7 +25,13 @@ export function CustomersListPage() {
 	const handleAdd = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			await createCustomer(formData);
+			if (!formData.contractStartDate) {
+				throw new Error('Contract start date is required');
+			}
+			await createCustomer({
+				...formData,
+				contractStartDate: formData.contractStartDate,
+			});
 			setShowAddModal(false);
 			setFormData({
 				companyName: '',

@@ -51,12 +51,13 @@ export async function updateCustomer(id: string, data: Partial<Customer>): Promi
 	await delay();
 	const index = customersStore.findIndex((c) => c.id === id);
 	if (index === -1) throw new Error('Customer not found');
-	customersStore[index] = {
+	const updated: Customer = {
 		...customersStore[index],
 		...data,
 		updatedAt: new Date().toISOString(),
 	};
-	return customersStore[index];
+	customersStore[index] = updated;
+	return updated;
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
@@ -88,8 +89,12 @@ export async function updateScope(id: string, data: Partial<Scope>): Promise<Sco
 	await delay();
 	const index = scopesStore.findIndex((s) => s.id === id);
 	if (index === -1) throw new Error('Scope not found');
-	scopesStore[index] = { ...scopesStore[index], ...data };
-	return scopesStore[index];
+	const updated: Scope = {
+		...scopesStore[index],
+		...data,
+	};
+	scopesStore[index] = updated;
+	return updated;
 }
 
 export async function deleteScope(id: string): Promise<void> {
@@ -126,12 +131,13 @@ export async function updateTestConfig(
 	await delay();
 	const index = testConfigsStore.findIndex((tc) => tc.id === id);
 	if (index === -1) throw new Error('Test configuration not found');
-	testConfigsStore[index] = {
+	const updated: TestConfiguration = {
 		...testConfigsStore[index],
 		...data,
 		updatedAt: new Date().toISOString(),
 	};
-	return testConfigsStore[index];
+	testConfigsStore[index] = updated;
+	return updated;
 }
 
 // Test Runs API
@@ -164,8 +170,12 @@ export async function updateTestRun(id: string, data: Partial<TestRun>): Promise
 	await delay();
 	const index = testRunsStore.findIndex((tr) => tr.id === id);
 	if (index === -1) throw new Error('Test run not found');
-	testRunsStore[index] = { ...testRunsStore[index], ...data };
-	return testRunsStore[index];
+	const updated: TestRun = {
+		...testRunsStore[index],
+		...data,
+	};
+	testRunsStore[index] = updated;
+	return updated;
 }
 
 // Reports API
@@ -203,8 +213,12 @@ export async function updateReport(id: string, data: Partial<Report>): Promise<R
 	await delay();
 	const index = reportsStore.findIndex((r) => r.id === id);
 	if (index === -1) throw new Error('Report not found');
-	reportsStore[index] = { ...reportsStore[index], ...data };
-	return reportsStore[index];
+	const updated: Report = {
+		...reportsStore[index],
+		...data,
+	};
+	reportsStore[index] = updated;
+	return updated;
 }
 
 // Helper: Get last and next run for a customer
