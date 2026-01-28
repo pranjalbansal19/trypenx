@@ -23,8 +23,8 @@ export async function generateExecutiveSummary(
   try {
     // Intelligently process files - prioritize important content
     // GPT-4o has ~128k token context (~500k+ characters)
-    // We'll use ~350k chars for content, leaving room for prompt (~120k chars) and response (~30k chars)
-    const maxContentLength = 350000
+    // We'll use ~300k chars for content, leaving room for prompt (~150k chars) and response (~20k chars)
+    const maxContentLength = 300000
     const maxFileSize = 80000 // Max size per individual file before sampling
 
     // Sort files by importance (reports, summaries first, then logs)
@@ -706,26 +706,29 @@ CRITICAL DATA ANALYSIS REQUIREMENT - ACCURACY IS MANDATORY:
 - DO NOT summarize or omit technical details - include EVERYTHING from the source files
 - The risk rating MUST be consistent with the findings summary table
 
-🚨 CRITICAL STATISTICAL CONSISTENCY - SECTION 4 IS THE SINGLE SOURCE OF TRUTH:
-- Section 4 (Detailed Findings) is the AUTHORITATIVE source for ALL statistics in the report
+🚨 CRITICAL STATISTICAL CONSISTENCY - FINDINGS REGISTER IS THE SINGLE SOURCE OF TRUTH:
+- The Findings Register (created before Section 4) is the AUTHORITATIVE source for ALL statistics in the report
 - BEFORE writing ANY section that mentions counts or statistics, you MUST:
-  1. FIRST: Generate Section 4 (Detailed Findings) completely
-  2. SECOND: Count the EXACT number of findings in Section 4:
-     * Count High observations in Section 4
-     * Count Medium observations in Section 4
-     * Count Low observations in Section 4
-     * Calculate TOTAL = High + Medium + Low
-  3. THIRD: Use those EXACT counts in ALL other sections
-- ALL sections MUST use the SAME counts as Section 4:
-  * Section 1.3 (Summary of Observations) MUST use Section 4's counts
-  * Section 5.2 (Severity Distribution) MUST use Section 4's counts
-  * Section 5.6 (Risk Trend Analysis) MUST use Section 4's counts
-  * ANY chart or graph MUST use Section 4's counts
-- If Section 4 shows "1 High, 5 Medium, 2 Low = 8 Total", then:
+  1. FIRST: Create the Findings Register with ALL findings from the data
+  2. SECOND: Lock the register and calculate counts:
+     * Count Critical findings from register = [C]
+     * Count High findings from register = [H]
+     * Count Medium findings from register = [M]
+     * Count Low findings from register = [L]
+     * Count Informational findings from register = [I]
+     * Calculate TOTAL = C + H + M + L + I
+     * LOCK the register - no modifications after this point
+  3. THIRD: Use these EXACT locked counts in ALL sections - DO NOT recalculate or use different numbers
+- ALL sections MUST use the SAME counts from the Findings Register:
+  * Section 1.3 (Summary of Observations) MUST use register counts
+  * Section 5.2 (Severity Distribution) MUST use register counts
+  * Section 5.6 (Risk Trend Analysis) MUST use register counts
+  * ANY chart or graph MUST use register counts
+- If the register shows "1 High, 5 Medium, 2 Low = 8 Total", then:
   * Section 1.3 MUST show "8 observations" (not 10, not 6, EXACTLY 8)
-  * Section 5.2 MUST show "High: 1, Medium: 5, Low: 2, Total: 8" (EXACTLY these numbers)
-  * Section 5.6 chart MUST show "High: 1 (12.5%), Medium: 5 (62.5%), Low: 2 (25.0%), Total: 8" (EXACTLY these numbers)
-  * NO section can show "0" or different numbers
+  * Section 5.2 MUST show counts matching the register exactly
+  * Section 5.6 chart MUST show percentages based on register counts
+  * NO section can show "0" or different numbers than the register
 - Charts and graphs MUST be dynamic based on Section 4's actual data:
   * If Section 4 has findings, charts MUST show those findings with correct counts and percentages
   * DO NOT show all zeros when Section 4 has findings
@@ -838,7 +841,24 @@ CRITICAL REQUIREMENTS:
 12. Structure the report with these REQUIRED sections (use ## for each main section, ### for subsections):
 
 ## Table of Contents
-Create a comprehensive table of contents that lists ALL sections and subsections with their page numbers. The report MUST have AT LEAST 25 SECTIONS total (main sections + subsections). Format as bullet points with proper numbering and hierarchy. Examples of sections to include (expand as needed to reach 25+ sections):
+CRITICAL: Create a comprehensive table of contents that lists ALL sections and subsections. The report MUST have AT LEAST 25 SECTIONS total (main sections + subsections). 
+
+FORMAT REQUIREMENTS - Use this exact format for each line:
+- For main sections: "- 1. Section Title" or "- 1 Section Title"
+- For subsections: "- 1.1 Subsection Title" or "  - 1.1 Subsection Title" (indented)
+- Include page numbers if available: "- 1. Section Title - Page 5"
+- Use simple bullet points with dashes (-)
+- One section per line
+- Do NOT use markdown headers (##, ###) in the TOC
+- Do NOT use code blocks or tables
+
+Examples:
+- 1. Executive Summary
+  - 1.1 Overview
+  - 1.2 Summary of Observations
+- 2. Scope of Assessment
+  - 2.1 Systems Tested
+  - 2.2 Testing Approach
 
 MAIN SECTIONS (##):
 - 1. Executive Summary
@@ -875,7 +895,7 @@ ${
   - 4.1 [First Finding Title]
   - 4.2 [Second Finding Title]
   - 4.3 [Third Finding Title]
-  - (Continue with ALL findings - each finding should be a separate subsection)
+  - [Continue listing ALL findings from the register - each finding must be a separate subsection 4.X]
 - 5. Risk Assessment
   - 5.1 Risk Matrix
   - 5.2 Severity Distribution
@@ -903,8 +923,8 @@ ${
       ? 'How This Scan Is Best Used'
       : 'Long-term Improvements'
   }
-  - 6.4 Remediation Priority Matrix (MANDATORY - must use card format)
-  - 6.5 Implementation Roadmap (MANDATORY - must use card format with WEEKS 1-2, WEEKS 3-4, and long-term roadmap)
+  - 6.4 Remediation Priority Matrix (MANDATORY - must use bullet points format)
+  - 6.5 Implementation Roadmap (MANDATORY - must use bullet points format with WEEKS 1-2, WEEKS 3-4, and long-term roadmap)
   - 6.6 Success Metrics
 - ${request.pentestType === 'soft' ? '7' : '7'}. Appendices
 ${
@@ -995,31 +1015,41 @@ CRITICAL CONSISTENCY REQUIREMENT - SECTION 4 IS THE SOURCE OF TRUTH:
 CRITICAL: This section MUST contain at least 8-10 lines of informative content. Provide:
 
 MANDATORY PROCESS - FOLLOW THESE STEPS IN ORDER:
-1. FIRST: Count the findings in Section 4 (Detailed Findings):
-   * Count High observations in Section 4 = [X]
-   * Count Medium observations in Section 4 = [Y]
-   * Count Low observations in Section 4 = [Z]
-   * Calculate TOTAL = X + Y + Z
 
-2. SECOND: Create the observation summary table using those EXACT counts:
+🔒 CRITICAL: All counts MUST be derived from the Findings Register (created before Section 4). The register is the SINGLE SOURCE OF TRUTH.
+
+1. FIRST: Get counts from the Findings Register:
+   * Go to the Findings Register you created
+   * Use the EXACT counts calculated from the register:
+     - Critical: [C] from register
+     - High: [H] from register
+     - Medium: [M] from register
+     - Low: [L] from register
+     - Informational: [I] from register
+     - Total: [C + H + M + L + I] from register
+   * These counts are LOCKED - use them exactly as calculated
+
+2. SECOND: Create the observation summary table using EXACT counts from the Findings Register. ALWAYS include ALL columns (Critical, High, Medium, Low, Informational) even if count is 0:
+
+🚨 CRITICAL: Use ONLY the counts from the Findings Register. DO NOT:
+- Recalculate counts
+- Use counts from Section 4
+- Use counts from input data
+- Modify the register counts
 
 | Observation Level | Count |
 |-------------------|-------|
-| High | [X - EXACT count from Section 4] |
-| Medium | [Y - EXACT count from Section 4] |
-| Low | [Z - EXACT count from Section 4] |
-| Total | [X + Y + Z - MUST equal the sum above] |
+| Critical | [C - EXACT count from your explicit list in Step 1, use 0 if none] |
+| High | [H - EXACT count from your explicit list in Step 1, use 0 if none] |
+| Medium | [M - EXACT count from your explicit list in Step 1, use 0 if none] |
+| Low | [L - EXACT count from your explicit list in Step 1, use 0 if none] |
+| Informational | [I - EXACT count from your explicit list in Step 1, use 0 if none] |
+| Total | [C + H + M + L + I - MUST equal the sum above] |
 
-3. THIRD: Write the introductory text using the SAME TOTAL from the table:
-   - Calculate: Table Total = High count + Medium count + Low count
-   - Write: "The scan identified [Table Total - use the EXACT number from table Total row] externally visible security observations that may warrant review${companyNameSuffix}"
-   - CRITICAL CONSISTENCY CHECK: Before finalizing, verify:
-     * Table shows: High: [X], Medium: [Y], Low: [Z], Total: [X+Y+Z]
-     * Text says: "[X+Y+Z] observations" (NOT X+Y+Z+2, NOT a different number)
-   - If table shows "Total: 9", text MUST say "9 observations" - NOT "11", NOT "10", NOT any other number
-   - If table shows "Total: 8", text MUST say "8 observations" - NOT "9", NOT "11", NOT any other number
-   - The number in the text MUST EXACTLY match the "Total" row in the table - NO EXCEPTIONS
-   - DO NOT add extra observations, DO NOT round up, DO NOT use a different total
+3. THIRD: Write the introductory text using the EXACT total from the Findings Register:
+   - Use the Total from the register: [C + H + M + L + I]
+   - Write: "The scan identified [EXACT total from register] externally visible security observations that may warrant review${companyNameSuffix}"
+   - CRITICAL: The number MUST match the register total exactly - NO exceptions
 
 4. FOURTH: Add additional context (can be in bullet points below the table):
    * Number of items related to publicly disclosed software versions
@@ -1031,17 +1061,17 @@ MANDATORY PROCESS - FOLLOW THESE STEPS IN ORDER:
 - The total number mentioned in the text MUST EXACTLY match the "Total" row in the table
 - There can be NO discrepancy - zero tolerance for mismatches
 - Calculation process:
-  1. Count findings in Section 4: High=[X], Medium=[Y], Low=[Z]
-  2. Table Total = X + Y + Z
-  3. Text MUST say: "[X+Y+Z] observations" (use the EXACT sum, no additions, no rounding)
+  1. Count findings in Section 4: Critical=[C], High=[X], Medium=[Y], Low=[Z], Informational=[I]
+  2. Table Total = C + X + Y + Z + I
+  3. Text MUST say: "[C+X+Y+Z+I] observations" (use the EXACT sum, no additions, no rounding)
 - Examples:
-  * If table shows "Total: 9" (3 High + 5 Medium + 1 Low), text MUST say "9 observations" - NOT "11"
-  * If table shows "Total: 8" (1 High + 5 Medium + 2 Low), text MUST say "8 observations" - NOT "9" or "10"
-  * If table shows "Total: 11" (2 High + 7 Medium + 2 Low), text MUST say "11 observations" - NOT "9" or "12"
-- DO NOT add informational items to the total
-- DO NOT count "Number of items related to publicly disclosed software versions" in the total
-- DO NOT count "Number of configuration-level observations" in the total
-- The total is ONLY High + Medium + Low observations from Section 4
+  * If table shows "Total: 9" (1 Critical + 3 High + 4 Medium + 1 Low + 0 Informational), text MUST say "9 observations" - NOT "11"
+  * If table shows "Total: 8" (0 Critical + 1 High + 5 Medium + 2 Low + 0 Informational), text MUST say "8 observations" - NOT "9" or "10"
+  * If table shows "Total: 11" (0 Critical + 2 High + 7 Medium + 2 Low + 0 Informational), text MUST say "11 observations" - NOT "9" or "12"
+- The total includes ALL observation levels: Critical + High + Medium + Low + Informational from Section 4
+- DO NOT count "Number of items related to publicly disclosed software versions" separately in the total
+- DO NOT count "Number of configuration-level observations" separately in the total
+- The total is the sum of ALL observations (Critical + High + Medium + Low + Informational) from Section 4
 - Context that these observations represent potential areas for review, not confirmed exploitable vulnerabilities${companyNameSuffix}
 - Explanation that further validation is recommended to assess real-world risk${companyNameSuffix}
 
@@ -1124,26 +1154,25 @@ CRITICAL CONSISTENCY REQUIREMENT - STATISTICS MUST BE CONSISTENT THROUGHOUT THE 
 - The risk score MUST be calculated from the actual counts in the findings table
 - DO NOT create conflicting information - the risk rating and findings table MUST align
 
-MANDATORY STATISTICAL CONSISTENCY ACROSS ALL SECTIONS - SECTION 4 IS THE SINGLE SOURCE OF TRUTH:
+MANDATORY STATISTICAL CONSISTENCY ACROSS ALL SECTIONS - FINDINGS REGISTER IS THE SINGLE SOURCE OF TRUTH:
 
-CRITICAL: Section 4 (Detailed Findings) is the AUTHORITATIVE SOURCE for all statistics. ALL other sections MUST reference Section 4's counts.
+CRITICAL: The Findings Register (created before Section 4) is the AUTHORITATIVE SOURCE for all statistics. ALL other sections MUST reference the register's counts.
 
 STEP-BY-STEP PROCESS:
-1. FIRST: Generate Section 4 (Detailed Findings) and count the EXACT number of findings in each category
-2. SECOND: Use those EXACT counts in ALL other sections - do NOT recalculate or use different numbers
-3. THIRD: Ensure the TOTAL count matches across all sections (if Section 4 has 10 findings total, ALL sections must show 10 total)
+1. FIRST: Create the Findings Register with ALL findings from the data and lock it
+2. SECOND: Calculate counts from the register and use those EXACT counts in ALL sections - do NOT recalculate
+3. THIRD: Generate Section 4 (Detailed Findings) from the register - one register row = one finding
+4. FOURTH: Ensure the TOTAL count matches across all sections (if register has 10 findings total, ALL sections must show 10 total)
 
 MANDATORY REQUIREMENTS:
-- Section 1.3 (Summary of Observations) MUST use EXACT counts from Section 4 - if Section 4 lists 10 total findings, Section 1.3 MUST say "10 observations" not a different number
-- Section 5.2 (Severity Distribution) MUST use EXACT counts from Section 4 - if Section 4 shows "1 High, 5 Medium, 2 Low", Section 5.2 MUST show the SAME numbers
-- Section 5.6 (Risk Trend Analysis) MUST use EXACT counts from Section 4 - if Section 4 lists findings, the chart MUST show those ACTUAL numbers, NOT zeros
-- Executive Summary MUST use EXACT counts from Section 4
-- ANY section mentioning findings counts MUST use the EXACT SAME numbers as Section 4
-- Charts and graphs MUST use ACTUAL data from Section 4 - if Section 4 has findings, charts MUST reflect those findings with correct percentages
-- DO NOT say "No high-severity findings identified" if Section 4 lists high-severity findings
-- DO NOT show "0" for any severity level if Section 4 lists findings in that category
-- DO NOT show "Total Vulnerabilities: 0" if Section 4 lists any findings
-- If Section 4 lists 10 total findings, ALL sections must show 10 total - there can be NO discrepancies
+- Section 1.3 (Summary of Observations) MUST use EXACT counts from the Findings Register
+- Section 5.2 (Severity Distribution) MUST use EXACT counts from the Findings Register
+- Section 5.6 (Risk Trend Analysis) MUST use EXACT counts from the Findings Register
+- Executive Summary MUST use EXACT counts from the Findings Register
+- ANY section mentioning findings counts MUST use the EXACT SAME numbers as the register
+- Charts and graphs MUST use ACTUAL data from the register
+- DO NOT show "0" for any severity level if the register has findings in that category
+- If the register lists 10 total findings, ALL sections must show 10 total - there can be NO discrepancies
 
 CHART/GRAPH REQUIREMENTS:
 - If you create a "Severity Distribution Overview" chart or any visual representation:
@@ -1280,8 +1309,103 @@ Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
 - Risk areas outside scope - explain potential security risks that exist in areas not covered by this assessment with detailed context (2-3 sentences)
 - Limitations impact - describe how these limitations affect the overall security assessment and what they mean for the organization (2-3 sentences)
 
+## Findings Register (INTERNAL - DO NOT DISPLAY IN REPORT - THIS SECTION MUST NOT APPEAR IN THE FINAL REPORT)
+
+🚨 CRITICAL: This Findings Register section is for INTERNAL USE ONLY. You MUST create it, but DO NOT include it in the final report output. This section should be created in your working notes but excluded from the actual report sections.
+
+🔒 GOLDEN RULE: The Findings Register is the SINGLE SOURCE OF TRUTH. All counts, summaries, and detailed findings MUST be derived from this register.
+
+STEP 1: CREATE MASTER FINDINGS REGISTER (MANDATORY - DO THIS FIRST - INTERNAL ONLY)
+
+Before writing ANY detailed findings or summary sections, you MUST create a locked Findings Register in your internal notes (NOT in the report).
+
+Create a table with EXACTLY these columns (in your internal notes, NOT in the report):
+| Finding ID | Title | Severity |
+|------------|-------|----------|
+| F-01 | [Title from data] | [Critical/High/Medium/Low/Informational] |
+| F-02 | [Title from data] | [Critical/High/Medium/Low/Informational] |
+| ... | ... | ... |
+
+CRITICAL REQUIREMENTS:
+- List EVERY finding from the data - do not skip any
+- Assign a unique Finding ID (F-01, F-02, F-03, etc.)
+- Assign severity based on the data (Critical/High/Medium/Low/Informational)
+- DO NOT combine findings - one finding = one row
+- DO NOT omit findings - include all findings from the data
+- DO NOT modify severities after assignment
+
+STEP 2: LOCK THE REGISTER AND CALCULATE COUNTS
+
+After creating the register:
+1. Count each severity level:
+   - Critical: Count = [C]
+   - High: Count = [H]
+   - Medium: Count = [M]
+   - Low: Count = [L]
+   - Informational: Count = [I]
+   - Total: [C + H + M + L + I]
+
+2. LOCK THE REGISTER:
+   - 🔒 This register is now LOCKED
+   - NO additions after this point
+   - NO deletions after this point
+   - NO severity changes after this point
+   - These counts are FINAL and must be used everywhere
+
+STEP 3: VALIDATE REGISTER COUNTS
+
+Before proceeding, verify:
+- [ ] Every finding from the data is in the register
+- [ ] No findings are duplicated
+- [ ] Severity counts are accurate
+- [ ] Total = sum of all severity counts
+
 ## Detailed Findings
-For EACH finding found in the data (Critical, High, Medium, and Low severity), provide COMPREHENSIVE details that thoroughly explain each vulnerability. ${
+
+CRITICAL: Generate detailed findings STRICTLY from the Findings Register above.
+
+RULE: One register row = ONE detailed finding section. No combining. No skipping.
+
+MANDATORY: You MUST generate a detailed finding section for EVERY row in the Findings Register. If the register has 11 findings, you MUST create 11 detailed finding sections (4.1 through 4.11). DO NOT stop after one finding. DO NOT include placeholder text like "(Continue with other findings...)". Generate ALL findings.
+
+For EACH row in the Findings Register:
+1. Create exactly ONE detailed finding section: ### 4.X [Title from Register]
+2. Use the EXACT severity from the register: **Severity:** [from Register] or **Observation:** [from Register]
+3. Use the EXACT Finding ID: **Finding ID:** F-XX (optional, can be included)
+4. Do NOT combine multiple register entries into one finding
+5. Do NOT skip any register entries - ALL must be included
+6. Do NOT change severities from the register
+7. Do NOT include placeholder text like "(Continue with other findings...)" or "(See other findings...)"
+8. Generate complete, detailed content for EVERY finding
+
+Format each finding as:
+### 4.X [Title from Register]
+**Severity:** [EXACT severity from Register] or **Observation:** [EXACT severity from Register]
+[Detailed content with Description, Business Impact, What Was Found, Affected Systems, Risk Scenario, Recommendation, Priority...]
+
+CRITICAL: Continue generating findings until ALL register entries are covered. If register has 11 findings, generate 11 sections. If register has 15 findings, generate 15 sections. NO EXCEPTIONS.
+
+STEP 4: USE THESE EXACT COUNTS IN ALL OTHER SECTIONS
+- Section 1.3 (Summary of Observations): Use Critical=[X], High=[Y], Medium=[Z], Low=[W], Informational=[V], Total=[X+Y+Z+W+V]
+- Section 5.2 (Severity Distribution): Use the SAME counts
+- Executive Summary: Use the SAME counts
+- ANY section mentioning counts: Use the SAME counts
+- DO NOT recalculate, DO NOT estimate, DO NOT use different numbers
+
+🚨 CRITICAL REQUIREMENT: Generate detailed findings for EVERY finding in the Findings Register.
+
+If the Findings Register has:
+- 11 findings → Generate 11 detailed finding sections (4.1, 4.2, 4.3, ..., 4.11)
+- 15 findings → Generate 15 detailed finding sections (4.1, 4.2, ..., 4.15)
+- N findings → Generate N detailed finding sections
+
+DO NOT:
+- Stop after generating one finding
+- Include placeholder text like "(Continue with other findings...)" or "(See other findings...)"
+- Skip any findings from the register
+- Combine multiple findings into one section
+
+For EACH finding in the Findings Register, provide COMPREHENSIVE details that thoroughly explain each vulnerability. ${
       request.pentestType === 'aggressive'
         ? 'For AGGRESSIVE mode: This section should be EXTENSIVE (8-12+ pages) with MAXIMUM detail and BEEFY content. Each CRITICAL/HIGH finding should be 6-10 paragraphs minimum (2-3 pages per finding) with extensive technical depth. MANDATORY: EVERY finding MUST include actual exploitation commands in code blocks - commands are NOT optional. Content must be EXTREMELY descriptive - explain every detail of the vulnerability, exploitation process, and impact. CRITICAL: The folder contains data from MULTIPLE IP ADDRESSES of the same domain - document findings for EACH IP separately with extensive detail. Create dedicated subsections for each IP address showing port scans, services, vulnerabilities, and exploitation results with complete command outputs. Show REAL attack scenarios with actual exploitation evidence. For SOFT mode: This section should be COMPREHENSIVE (3-5 pages) with detailed analysis for each finding. Each finding should be 2-3 paragraphs minimum with thorough explanations.'
         : 'For SOFT mode: This section should be EXTENSIVE and COMPREHENSIVE (5-10+ pages) with MAXIMUM detail and substantial content. Each finding should be 4-6 paragraphs minimum (1-2 pages per finding) with thorough explanations, detailed technical context, comprehensive business impact analysis, and extensive remediation guidance. Include ALL findings from the data - do not skip any. Content must be substantial and provide real value - no brief summaries allowed.'
@@ -1484,9 +1608,9 @@ CRITICAL: Write 15-20 lines of ACTUAL risk matrix based on THIS assessment's fin
 ### 5.2 Severity Distribution
 Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
 
-CRITICAL CONSISTENCY REQUIREMENT: This section MUST use the EXACT SAME counts as the findings listed in Section 4 (Detailed Findings). If Section 4 lists findings (e.g., "2 Critical observations", "4 High observations", "3 Medium observations", "2 Low observations"), then this section MUST reflect those EXACT numbers. DO NOT show "0" or "No findings" if findings are listed elsewhere in the report.
+CRITICAL CONSISTENCY REQUIREMENT: This section MUST use the EXACT SAME counts as the findings listed in Section 4 (Detailed Findings). If Section 4 lists findings (e.g., "1 Critical observations", "2 High observations", "5 Medium observations", "2 Low observations", "4 Informational observations"), then this section MUST reflect those EXACT numbers. DO NOT show "0" or "No findings" if findings are listed elsewhere in the report.
 
-- Comprehensive breakdown of findings by severity level using the ACTUAL counts from Section 4 (Detailed Findings) - COUNT the findings in Section 4 FIRST, then use those EXACT counts here with detailed counts and percentages (2-3 sentences)
+- Comprehensive breakdown of findings by severity level using the ACTUAL counts from Section 4 (Detailed Findings) - COUNT ALL findings in Section 4 FIRST (Critical, High, Medium, Low, Informational), then use those EXACT counts here with detailed counts and percentages (2-3 sentences)
 - Detailed analysis of severity distribution patterns, trends, and statistical insights based on the ACTUAL findings from this scan (2-3 sentences)
 - Identification of severity concentration areas, systems, and infrastructure components from the ACTUAL findings (2-3 sentences)
 - Assessment of severity impact on overall security posture with business implications based on the ACTUAL findings (2-3 sentences)
@@ -1494,17 +1618,38 @@ CRITICAL CONSISTENCY REQUIREMENT: This section MUST use the EXACT SAME counts as
 - Analysis of severity correlation with business impact, operational risk, and financial exposure based on the ACTUAL findings (2-3 sentences)
 - Recommendations for addressing findings with specific action items and timelines based on the ACTUAL findings (2-3 sentences)
 
-MANDATORY: Create a table showing the ACTUAL counts from Section 4. COUNT the findings in Section 4 FIRST, then create this table:
+MANDATORY: Create a table using EXACT counts from the Findings Register (the single source of truth).
+
+🔒 CRITICAL: Use ONLY the counts from the Findings Register. DO NOT recalculate or use counts from Section 4.
+
+STEP 1: Get counts from the Findings Register:
+- Go to the Findings Register you created
+- Use the EXACT counts: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I], Total=[C+H+M+L+I]
+- These counts are LOCKED - use them exactly
+
+STEP 2: CREATE THE TABLE USING THOSE EXACT COUNTS. ALWAYS include ALL columns (Critical, High, Medium, Low, Informational) even if count is 0:
 | Observation Level | Count |
 |-------------------|-------|
-| High | [COUNT findings in Section 4 - use EXACT number] |
-| Medium | [COUNT findings in Section 4 - use EXACT number] |
-| Low | [COUNT findings in Section 4 - use EXACT number] |
-| Total | [SUM of High + Medium + Low from Section 4] |
+| Critical | [C - EXACT count from Step 1, use 0 if none] |
+| High | [H - EXACT count from Step 1, use 0 if none] |
+| Medium | [M - EXACT count from Step 1, use 0 if none] |
+| Low | [L - EXACT count from Step 1, use 0 if none] |
+| Informational | [I - EXACT count from Step 1, use 0 if none] |
+| Total | [C + H + M + L + I - MUST equal the sum above] |
 
-CRITICAL: The Total MUST equal the sum of High + Medium + Low. If Section 4 has 1 High + 5 Medium + 2 Low = 8 Total, this table MUST show exactly that. If Section 4 shows 10 total findings, this table MUST show 10 total. The counts MUST match Section 4 exactly - there can be NO discrepancies.
+STEP 3: VERIFY BEFORE FINALIZING:
+- [ ] I used EXACT counts from the Findings Register
+- [ ] Critical count in table = [C] from register
+- [ ] High count in table = [H] from register
+- [ ] Medium count in table = [M] from register
+- [ ] Low count in table = [L] from register
+- [ ] Informational count in table = [I] from register
+- [ ] Total in table = C + H + M + L + I from register
+- [ ] These counts match Section 1.3 (Summary of Observations) exactly
 
-If no findings exist in a category, you may show 0, but ONLY if Section 4 also shows no findings in that category.
+CRITICAL: The Total MUST equal the sum from the Findings Register. The counts MUST match the register exactly - there can be NO discrepancies. If the register shows 1 Critical + 2 High + 5 Medium + 2 Low + 0 Informational = 10 Total, this table MUST show exactly that.
+
+ALL columns must always be present in the table, even if count is 0.
 
 ### 5.3 Business Impact Analysis
 Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
@@ -1566,54 +1711,53 @@ Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
 
 ### 5.6 Risk Trend Analysis
 Provide 15-20 lines of detailed content (3-4 paragraphs, each 4-6 sentences):
+IMPORTANT: Do NOT include any charts, graphs, or visual representations in this section as they will not be rendered. Focus on textual analysis and explanations only.
 ${
   request.pentestType === 'soft'
     ? `CRITICAL REQUIREMENTS FOR VULNERABILITY SCANS (15-20 lines, 3-4 paragraphs, each 4-6 sentences):
 
 MANDATORY: DO NOT show "Total Vulnerabilities: 0" or any numeric charts showing zero values when findings exist. This creates factual inconsistency and undermines credibility.
 
-CRITICAL CONSISTENCY REQUIREMENT - SECTION 4 IS THE SOURCE OF TRUTH:
-- This section MUST use the EXACT SAME counts as Section 4 (Detailed Findings)
-- BEFORE writing this section, COUNT the findings in Section 4:
-  * How many High observations are listed in Section 4? Use that EXACT number
-  * How many Medium observations are listed in Section 4? Use that EXACT number
-  * How many Low observations are listed in Section 4? Use that EXACT number
-  * What is the TOTAL count in Section 4? Use that EXACT total
-- If Section 4 lists findings (e.g., "1 High, 5 Medium, 2 Low = 8 total"), then this section MUST reflect those EXACT numbers
-- DO NOT show "0" or "No findings" if findings are listed in Section 4
-- DO NOT create charts showing zeros when Section 4 has actual findings
+CRITICAL CONSISTENCY REQUIREMENT - FINDINGS REGISTER IS THE SOURCE OF TRUTH:
+- This section MUST use the EXACT SAME counts from the Findings Register
+- BEFORE writing this section, get counts from the Findings Register:
+  * Use the EXACT counts: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I], Total=[C+H+M+L+I]
+- If the register shows findings (e.g., "1 High, 5 Medium, 2 Low = 8 total"), then this section MUST reflect those EXACT numbers
+- DO NOT show "0" or "No findings" if the register has findings in that category
+- DO NOT create charts showing zeros when the register has actual findings
 
 CHART/GRAPH MANDATORY REQUIREMENTS - ABSOLUTE PROHIBITION ON ZEROS:
-🚨 CRITICAL: If Section 4 has findings, you MUST NOT generate any chart, graph, or visual representation showing zeros. This is ABSOLUTELY PROHIBITED.
+🚨 CRITICAL: If the Findings Register has findings, you MUST NOT generate any chart, graph, or visual representation showing zeros. This is ABSOLUTELY PROHIBITED.
 
-- If Section 4 lists findings (e.g., "3 High, 4 Medium, 1 Low = 8 total"), then:
+- If the register shows findings (e.g., "1 Critical, 3 High, 4 Medium, 1 Low, 2 Informational = 11 total"), then:
   * DO NOT create a chart showing "0" for any category
   * DO NOT show "Total Vulnerabilities: 0"
   * DO NOT show "0.0%" for any category
-  * The chart MUST use EXACT counts from Section 4
+  * The chart MUST use EXACT counts from the Findings Register
   
 - If you create a "Severity Distribution Overview" chart or any visual:
-  * FIRST: Count the findings in Section 4
-  * SECOND: Use EXACT counts from Section 4: High=[EXACT count from Section 4], Medium=[EXACT count from Section 4], Low=[EXACT count from Section 4]
-  * THIRD: Calculate percentages: High % = (High count / Total) × 100, Medium % = (Medium count / Total) × 100, Low % = (Low count / Total) × 100
-  * FOURTH: Show "Total Vulnerabilities: [ACTUAL TOTAL from Section 4]" - if Section 4 has 8 total, show "8" not "0"
+  * FIRST: Get counts from the Findings Register: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I]
+  * SECOND: Use EXACT counts from the register
+  * THIRD: Calculate percentages: Critical % = (C / Total) × 100, High % = (H / Total) × 100, etc.
+  * FOURTH: Show "Total Vulnerabilities: [ACTUAL TOTAL from register]" - if register has 11 total, show "11" not "0"
   
-- EXAMPLE: If Section 4 has 3 High, 4 Medium, 1 Low = 8 Total, the chart MUST show:
-  * Critical: 0 (0.0%) - only if Section 4 has no Critical findings
-  * High: 3 (37.5%) - EXACT count from Section 4
-  * Medium: 4 (50.0%) - EXACT count from Section 4
-  * Low: 1 (12.5%) - EXACT count from Section 4
-  * Total: 8 - EXACT total from Section 4
+- EXAMPLE: If the register has 1 Critical, 3 High, 4 Medium, 1 Low, 0 Informational = 9 Total, the chart MUST show:
+  * Critical: 1 (11.1%) - EXACT count from register
+  * High: 3 (33.3%) - EXACT count from register
+  * Medium: 4 (44.4%) - EXACT count from Section 4
+  * Low: 1 (11.1%) - EXACT count from Section 4
+  * Informational: 0 (0.0%) - only if Section 4 has no Informational findings
+  * Total: 9 - EXACT total from Section 4
   
 - ABSOLUTE RULE: If Section 4 has ANY findings, the chart MUST reflect those findings. DO NOT show all zeros (0, 0.0%) when Section 4 has actual findings. This creates a critical inconsistency that undermines the entire report.
 
 CHOOSE ONE APPROACH:
-1. Reframe as baseline assessment: Explicitly state that this is a baseline assessment and that trend tracking will occur over time with future scans. Use the ACTUAL counts from Section 4 when establishing the baseline. For example: "This baseline assessment identified [EXACT count from Section 4] High observations, [EXACT count from Section 4] Medium observations, and [EXACT count from Section 4] Low observations (Total: [EXACT TOTAL from Section 4]). Future scans will track changes from this baseline." If you mention a chart, it MUST show the ACTUAL counts from Section 4 - DO NOT describe a chart showing zeros. (2-3 sentences)
-2. OR remove numeric chart entirely: Replace any numeric charts with a short explanatory paragraph indicating that trend data requires historical scans over multiple assessment periods. Reference the ACTUAL findings from Section 4: "This scan identified [EXACT count from Section 4] High observations, [EXACT count from Section 4] Medium observations, and [EXACT count from Section 4] Low observations (Total: [EXACT TOTAL from Section 4]). Trend analysis requires multiple scans over time to identify patterns." DO NOT mention or describe any chart that shows zeros. (2-3 sentences)
+1. Reframe as baseline assessment: Explicitly state that this is a baseline assessment and that trend tracking will occur over time with future scans. Use the ACTUAL counts from Section 4 when establishing the baseline. For example: "This baseline assessment identified [EXACT count] Critical, [EXACT count] High, [EXACT count] Medium, [EXACT count] Low, and [EXACT count] Informational observations (Total: [EXACT TOTAL from Section 4]). Future scans will track changes from this baseline." If you mention a chart, it MUST show the ACTUAL counts from Section 4 - DO NOT describe a chart showing zeros. (2-3 sentences)
+2. OR remove numeric chart entirely: Replace any numeric charts with a short explanatory paragraph indicating that trend data requires historical scans over multiple assessment periods. Reference the ACTUAL findings from Section 4: "This scan identified [EXACT count] Critical, [EXACT count] High, [EXACT count] Medium, [EXACT count] Low, and [EXACT count] Informational observations (Total: [EXACT TOTAL from Section 4]). Trend analysis requires multiple scans over time to identify patterns." DO NOT mention or describe any chart that shows zeros. (2-3 sentences)
 
 MANDATORY: If you include any statistics, counts, or charts in this section, they MUST match Section 4 exactly. There can be NO contradictions. The chart MUST be dynamic based on Section 4's actual findings.
 
-🚨 ABSOLUTE PROHIBITION: DO NOT describe, mention, or create any chart, graph, or visual that shows "0" or "0.0%" for any category if Section 4 has findings in that category. If Section 4 shows "3 High, 4 Medium, 1 Low = 8 Total", then any chart description MUST show those EXACT numbers, not zeros. If you cannot ensure the chart matches Section 4 exactly, DO NOT include a chart description at all.
+🚨 ABSOLUTE PROHIBITION: DO NOT describe, mention, or create any chart, graph, or visual that shows "0" or "0.0%" for any category if Section 4 has findings in that category. If Section 4 shows "1 Critical, 3 High, 4 Medium, 1 Low, 2 Informational = 11 Total", then any chart description MUST show those EXACT numbers including ALL severity levels, not zeros. If you cannot ensure the chart matches Section 4 exactly, DO NOT include a chart description at all.
 
 ADDITIONAL LANGUAGE REQUIREMENTS:
 - DO NOT frame trends as "increasing risk" - frame as "visibility over time" (2-3 sentences explaining this approach)
@@ -1637,7 +1781,11 @@ ADDITIONAL LANGUAGE REQUIREMENTS:
         ? 'Recommended Next Steps'
         : 'Recommendations and Next Steps'
     }
-🚨 CRITICAL: This section is MANDATORY and must ALWAYS be included. ALL subsections (6.1, 6.2, 6.3, 6.4, 6.5, 6.6) are COMPULSORY and CAN NEVER BE EMPTY. Provide COMPREHENSIVE, DETAILED actionable guidance. 
+🚨 CRITICAL: This section is MANDATORY and must ALWAYS be included. ALL subsections (6.1, 6.2, 6.3, 6.4, 6.5, 6.6) are COMPULSORY and CAN NEVER BE EMPTY. 
+
+🚨 DO NOT STOP AFTER SECTION 6.2 - You MUST continue generating sections 6.3, 6.4, 6.5, 6.6, then ALL of Section 7 (7.1, 7.2, 7.3, 7.4), and Section 8 if applicable. The report is INCOMPLETE until ALL sections are generated.
+
+Provide COMPREHENSIVE, DETAILED actionable guidance for each subsection. 
 
 ABSOLUTE REQUIREMENT: NO ONE-LINERS ALLOWED. Every subsection MUST contain:
 - Minimum 20-25 lines of substantial content (NOT 6-7, but 20-25)
@@ -1823,23 +1971,35 @@ GOOD EXAMPLE (DO THIS):
 ### 6.4 Remediation Priority Matrix
 🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 20-25 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
 
-FORMAT REQUIREMENT (MANDATORY): Format this section using card-style boxes. Start with an introductory paragraph (3-4 sentences), then list priorities in card format. This exact format is REQUIRED:
+FORMAT REQUIREMENT (MANDATORY): Format this section using simple bullet points (NOT boxes or cards). Start with an introductory paragraph (3-4 sentences), then list priorities using bullet points. This exact format is REQUIRED:
 
 The matrix outlines the prioritisation of remedial actions based on severity and impact for ${domainName}${companyNameSuffix}. This prioritisation framework helps ${domainName} allocate resources effectively and address the most critical security observations first${companyNameSuffix}. The following sections break down findings by priority level, with specific recommendations for each category${companyNameSuffix}.
 
-**Critical (0-7 days):** 
-[List specific critical findings from THIS test that need immediate action - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no critical findings exist, you MUST still include this section with: "- No critical findings identified in this scan. However, any critical findings discovered in future scans should be addressed within 0-7 days." Then add 1-2 additional bullet points explaining what types of issues would be considered critical and why immediate action is important${companyNameSuffix}.]
+**Critical (0-7 days):**
+- List specific critical findings from THIS test that need immediate action - use actual finding names
+- Format: "- [Finding name] - [Brief description]"
+- If no critical findings exist, you MUST still include this section with: "- No critical findings identified in this scan. However, any critical findings discovered in future scans should be addressed within 0-7 days."
+- Add 1-2 additional bullet points explaining what types of issues would be considered critical and why immediate action is important${companyNameSuffix}
 
-**High (1-4 weeks):** 
-[List specific high-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no high findings exist, you MUST still include this section with: "- No high-severity findings identified in this scan. High-severity findings typically include issues that could potentially lead to unauthorized access or data exposure if left unaddressed." Then add 1-2 additional bullet points explaining the importance of addressing high-severity findings promptly${companyNameSuffix}.]
+**High (1-4 weeks):**
+- List specific high-severity findings from THIS test - use actual finding names
+- Format: "- [Finding name] - [Brief description]"
+- If no high findings exist, you MUST still include this section with: "- No high-severity findings identified in this scan. High-severity findings typically include issues that could potentially lead to unauthorized access or data exposure if left unaddressed."
+- Add 1-2 additional bullet points explaining the importance of addressing high-severity findings promptly${companyNameSuffix}
 
-**Medium (1-3 months):** 
-[List specific medium-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no medium findings exist, you MUST still include this section with: "- No medium-severity findings identified in this scan. Medium-severity findings typically include configuration issues and best practice recommendations." Then add 1-2 additional bullet points explaining medium-severity findings and their typical remediation timeline${companyNameSuffix}.]
+**Medium (1-3 months):**
+- List specific medium-severity findings from THIS test - use actual finding names
+- Format: "- [Finding name] - [Brief description]"
+- If no medium findings exist, you MUST still include this section with: "- No medium-severity findings identified in this scan. Medium-severity findings typically include configuration issues and best practice recommendations."
+- Add 1-2 additional bullet points explaining medium-severity findings and their typical remediation timeline${companyNameSuffix}
 
-**Low (3-12 months):** 
-[List specific low-severity findings from THIS test - use bullet points with actual finding names. Format: "- [Finding name] - [Brief description]". If no low findings exist, you MUST still include this section with: "- No low-severity findings identified in this scan. Low-severity findings typically include informational observations and minor configuration improvements." Then add 1-2 additional bullet points explaining low-severity findings and their place in a comprehensive security program${companyNameSuffix}.]
+**Low (3-12 months):**
+- List specific low-severity findings from THIS test - use actual finding names
+- Format: "- [Finding name] - [Brief description]"
+- If no low findings exist, you MUST still include this section with: "- No low-severity findings identified in this scan. Low-severity findings typically include informational observations and minor configuration improvements."
+- Add 1-2 additional bullet points explaining low-severity findings and their place in a comprehensive security program${companyNameSuffix}
 
-CRITICAL: For each priority level, you MUST reference ACTUAL findings from THIS test by name using bullet points (starting with "-"). If no findings exist in a category, you MUST still provide AT LEAST 2-3 bullet points explaining what that category means and why it's important. NEVER leave a priority level empty or with just a heading. ALWAYS provide bullet points for every priority level.
+CRITICAL: For each priority level, you MUST reference ACTUAL findings from THIS test by name using bullet points (starting with "-"). If no findings exist in a category, you MUST still provide AT LEAST 2-3 bullet points explaining what that category means and why it's important. NEVER leave a priority level empty or with just a heading. ALWAYS provide bullet points for every priority level. Use simple bullet points format, NOT boxes or cards.
 1. PRIORITY MATRIX WITH ACTUAL FINDINGS (8-10 lines minimum):
    - Create a COMPREHENSIVE priority matrix showing ALL findings from THIS test:
      * Critical findings requiring immediate action (0-7 days) - list each by name
@@ -1868,32 +2028,32 @@ CRITICAL: For each priority level, you MUST reference ACTUAL findings from THIS 
 ### 6.5 Implementation Roadmap
 🚨 CRITICAL MANDATORY SECTION: This section is COMPULSORY and MUST ALWAYS be included in every report. THIS SECTION CAN NEVER BE EMPTY. This section MUST contain AT LEAST 20-25 lines of substantial, detailed content. DO NOT write generic definitions. Write EXTENSIVE, SPECIFIC content that explains:
 
-FORMAT REQUIREMENT: Format this section using card-style boxes with checkmarks. Start with an introductory paragraph (3-4 sentences), then use this exact structure (this format is MANDATORY):
+FORMAT REQUIREMENT: Format this section using simple bullet points (NOT boxes or cards). Start with an introductory paragraph (3-4 sentences), then use this exact structure with bullet points (this format is MANDATORY):
 
 This implementation roadmap provides ${domainName} with a structured approach to addressing the security observations identified in this vulnerability scan${companyNameSuffix}. The roadmap is organized into short-term actions (weeks 1-4) and optional long-term improvements (3-12 months)${companyNameSuffix}. This phased approach allows ${domainName} to address immediate concerns while building toward a more comprehensive security posture${companyNameSuffix}.
 
 **WEEKS 1-2:**
-- [Specific action item 1 based on actual findings - reference by name]
-- [Specific action item 2 based on actual findings - reference by name]
-- [Specific action item 3 based on actual findings - reference by name]
-- [If fewer than 3 findings exist, add: "Review and validate all findings from this scan to confirm their relevance and risk in context${companyNameSuffix}."]
+- Specific action item 1 based on actual findings - reference by name
+- Specific action item 2 based on actual findings - reference by name
+- Specific action item 3 based on actual findings - reference by name
+- If fewer than 3 findings exist, add: "Review and validate all findings from this scan to confirm their relevance and risk in context${companyNameSuffix}."
 
 **WEEKS 3-4:**
-- [Specific action item 1 based on actual findings - reference by name]
-- [Specific action item 2 based on actual findings - reference by name]
-- [Specific action item 3 based on actual findings - reference by name]
-- [If fewer than 3 findings exist, add: "Implement standard web security headers and best practices across all web services${companyNameSuffix}."]
+- Specific action item 1 based on actual findings - reference by name
+- Specific action item 2 based on actual findings - reference by name
+- Specific action item 3 based on actual findings - reference by name
+- If fewer than 3 findings exist, add: "Implement standard web security headers and best practices across all web services${companyNameSuffix}."
 
 **3-12 Month Security Maturity Roadmap (Optional):**
 If desired, ${domainName} can implement a longer-term resilience programme${companyNameSuffix}:
 
-- [Long-term improvement 1 based on actual findings - reference specific patterns or themes from findings]
-- [Long-term improvement 2 based on actual findings - reference specific patterns or themes from findings]
-- [Long-term improvement 3 based on actual findings - reference specific patterns or themes from findings]
-- [If fewer findings exist, add: "Establish regular vulnerability scanning schedule to maintain visibility over external exposure${companyNameSuffix}."]
-- [If fewer findings exist, add: "Develop security awareness training program for development and operations teams${companyNameSuffix}."]
+- Long-term improvement 1 based on actual findings - reference specific patterns or themes from findings
+- Long-term improvement 2 based on actual findings - reference specific patterns or themes from findings
+- Long-term improvement 3 based on actual findings - reference specific patterns or themes from findings
+- If fewer findings exist, add: "Establish regular vulnerability scanning schedule to maintain visibility over external exposure${companyNameSuffix}."
+- If fewer findings exist, add: "Develop security awareness training program for development and operations teams${companyNameSuffix}."
 
-CRITICAL: You MUST reference ACTUAL findings from THIS test. If findings are limited, you MUST still provide actionable recommendations based on common security best practices and the types of observations typically found in external vulnerability scans. NEVER leave this section empty. ALWAYS provide at least 3-4 action items for each time period, even if some are general best practices based on the scan type.
+CRITICAL: You MUST reference ACTUAL findings from THIS test. If findings are limited, you MUST still provide actionable recommendations based on common security best practices and the types of observations typically found in external vulnerability scans. NEVER leave this section empty. ALWAYS provide at least 3-4 action items for each time period, even if some are general best practices based on the scan type. Use simple bullet points (-) format, NOT boxes or cards.
 
 1. DETAILED IMPLEMENTATION TIMELINE (8-10 lines minimum):
    - Create a COMPREHENSIVE roadmap based on ACTUAL findings from THIS test:
@@ -1953,7 +2113,11 @@ ${
     : ''
 }
 
-## Appendix
+## Appendices
+🚨 CRITICAL: This section is MANDATORY and must ALWAYS be included. ALL subsections (7.1, 7.2, 7.3, 7.4) are COMPULSORY and CAN NEVER BE EMPTY.
+
+🚨 DO NOT STOP AFTER GENERATING SECTION 7 - You MUST generate ALL subsections: 7.1, 7.2, 7.3, 7.4, and then Section 8 (Closing Note) if applicable. The report is INCOMPLETE until ALL sections are generated.
+
 Provide COMPREHENSIVE, DETAILED supporting information. Each appendix subsection MUST be SUBSTANTIAL and FILLED with extensive content - not just brief descriptions. This section should include well-structured tables, detailed explanations, and comprehensive formatted content:
 
 ### 7.1 Scope & Methodology Details
@@ -2125,20 +2289,33 @@ CRITICAL OUTPUT FORMAT:
 - Use pure markdown: ## for main sections, ### for subsections, ** for bold text, - for bullet points
 - Add proper spacing between sections (blank lines)
 
-MANDATORY SECTIONS THAT MUST ALWAYS BE INCLUDED (DO NOT SKIP):
-🚨 CRITICAL: ALL sections listed in the Table of Contents are MANDATORY and MUST be included with substantial content. NO section can be skipped or left empty.
+🚨 MANDATORY SECTIONS - DO NOT STOP UNTIL ALL ARE COMPLETE:
 
-Specifically, these sections are ABSOLUTELY CRITICAL and must NEVER be empty:
-- ALL Executive Summary subsections (1.1, 1.2, 1.3, 1.4, etc.)
-- ALL Recommendations subsections (6.1, 6.2, 6.3, 6.4, 6.5, 6.6) - EVERY ONE is mandatory
-- 6.4 Remediation Priority Matrix (MUST be included in every report, MUST use card format with **Critical (0-7 days):**, **High (1-4 weeks):**, **Medium (1-3 months):**, **Low (3-12 months):**)
-- 6.5 Implementation Roadmap (MUST be included in every report, MUST use card format with **WEEKS 1-2:**, **WEEKS 3-4:**, and **3-12 Month Security Maturity Roadmap**)
-- ALL Appendix subsections (7.1, 7.2, 7.3, 7.4)
+CRITICAL: ALL sections listed in the Table of Contents are MANDATORY and MUST be included with substantial content. NO section can be skipped or left empty. DO NOT stop generating until ALL sections below are complete.
+
+COMPLETION CHECKLIST - Verify ALL sections are present before finishing:
+- [ ] Section 1: Executive Summary (with ALL subsections 1.1, 1.2, 1.3, 1.4, etc.)
+- [ ] Section 2: Scope/Methodology (with ALL subsections 2.1, 2.2, 2.3, 2.4, 2.5)
+- [ ] Section 3: Attack Surface Analysis (with ALL subsections 3.1, 3.2, 3.3, 3.4, 3.5, 3.6)
+- [ ] Section 4: Detailed Findings (ALL findings from register - verify count matches)
+- [ ] Section 5: Risk Assessment (with ALL subsections 5.1, 5.2, 5.3, 5.4, 5.5, 5.6)
+- [ ] Section 6.1: ${request.pentestType === 'soft' ? 'Short-Term (Good Practice)' : 'Immediate Actions'} - COMPLETE
+- [ ] Section 6.2: ${request.pentestType === 'soft' ? 'Optional Validation' : 'Short-term Remediation'} - COMPLETE
+- [ ] Section 6.3: ${request.pentestType === 'soft' ? 'How This Scan Is Best Used' : 'Long-term Improvements'} - COMPLETE
+- [ ] Section 6.4: Remediation Priority Matrix - COMPLETE (with bullet points format)
+- [ ] Section 6.5: Implementation Roadmap - COMPLETE (with bullet points format)
+- [ ] Section 6.6: Success Metrics - COMPLETE
+- [ ] Section 7.1: Scope & Methodology Details - COMPLETE
+- [ ] Section 7.2: Technical References - COMPLETE
+- [ ] Section 7.3: Glossary - COMPLETE
+- [ ] Section 7.4: Additional Resources - COMPLETE
 ${
   request.pentestType === 'soft'
-    ? '- 8. Closing Note (MUST be the LAST section, after all Appendix sections)'
+    ? '- [ ] Section 8: Closing Note - COMPLETE (MUST be the LAST section)'
     : ''
 }
+
+🚨 ABSOLUTE RULE: If ANY section above is missing or incomplete, you MUST continue generating until ALL sections are finished. Do NOT stop at section 6.2 or any other section. The report is INCOMPLETE until ALL sections are generated.
 
 These sections are CRITICAL for clients and must be present in EVERY SINGLE REPORT with substantial content. Do NOT skip them under any circumstances. They provide essential value to the client. If a section appears empty or minimal, you MUST expand it with relevant content.
 - Use bullet points (-) for lists to make content scannable
@@ -2236,37 +2413,62 @@ Penetration Test Data:
     const finalPrompt =
       promptBase +
       contentToSend +
-      `\n\nCRITICAL FINAL REMINDERS:
-- Replace ALL dates/times in your response with: ${todayFormatted}
-- Use UK English spelling throughout (e.g., "colour" not "color", "organise" not "organize", "centre" not "center", "whilst" not "while", "realise" not "realize", "optimise" not "optimize", "analyse" not "analyze")
-- Write for CUSTOMERS and EXECUTIVES - avoid technical jargon
-- Do NOT mention file paths, directories, or internal technical structures
-- Focus on business impact and risk
-- DO NOT include placeholder text, brackets, or incomplete sections like "[Contact information]", "[To be added]", "[TBD]", etc.
-- ONLY write sections with actual, meaningful content from the provided data
-- Every section must contain real information - if you don't have the information, omit the section entirely
-- This is a customer-facing document - placeholder text looks unprofessional and creates a bad impression
-- CRITICAL: DO NOT write generic definitions or explanations of what sections are. Write ACTUAL content about the findings from THIS penetration test.
-- CRITICAL: DO NOT include any text about "This section starts on a new page" or any internal formatting instructions. These are handled automatically and should NEVER appear in the report.
+      `\n\n🚨 FINAL VALIDATION - VERIFY COMPLETE REPORT:
 
-CRITICAL: EDUCATION AND URGENCY REQUIREMENTS:
-- INCLUDE educational moments about shared responsibility when third-party platforms (Shopify, Cloudflare, AWS, WordPress, etc.) are involved
-- EXPLAIN that while platforms secure their infrastructure, ${domainName} remains responsible for configuration, APIs, subdomains, and development environments
-- USE statements like: "While [Platform] secures the platform itself, responsibility for [specific areas] remains with ${domainName}."
-- CREATE urgency with factual statements about exploitation timelines in Business Impact and Risk Scenario sections
-- ADD impactful lines such as: "These vulnerabilities are routinely exploited by automated scanners within days of exposure."
-- USE real-world facts and timelines to create urgency, not hypothetical scenarios
-- BALANCE urgency with actionable recommendations - motivate action without fear-mongering
-- CONNECT educational content to immediate action items
+SECTION COMPLETION CHECK (CRITICAL - Report is INCOMPLETE if any section is missing):
+1. Count all main sections (##) - must include: Table of Contents, Executive Summary, Scope/Methodology, Attack Surface Analysis, Detailed Findings, Risk Assessment, Recommended Next Steps, Appendices${request.pentestType === 'soft' ? ', Closing Note' : ''}
+2. Verify Section 6 has ALL subsections: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 (check for "### 6.1", "### 6.2", etc.)
+3. Verify Section 7 has ALL subsections: 7.1, 7.2, 7.3, 7.4 (check for "### 7.1", "### 7.2", etc.)
+${request.pentestType === 'soft' ? '4. Verify Section 8 (Closing Note) exists and is the last section (check for "## Closing Note" or "## 8. Closing Note")' : '4. Verify report ends with Section 7.4 (Additional Resources)'}
+5. If ANY section from the Table of Contents is missing, the report is INCOMPLETE - you MUST continue generating until ALL sections are present
 
-CRITICAL STRUCTURE AND CONTENT VERIFICATION:
-- VERIFY: The report MUST contain AT LEAST 25 SECTIONS total (main sections + subsections). Count them before finalizing.
-- VERIFY: EVERY section and subsection MUST contain AT LEAST 6-7 lines of informative, valuable content. Check each section.
-- If you have fewer than 25 sections, ADD MORE sections (e.g., additional findings subsections, IP-specific sections, vulnerability category sections, compliance sections, technical deep-dives, etc.)
-- If any section has fewer than 6-7 lines, EXPAND it with additional relevant content, details, examples, or explanations
-- Each section should provide substantial value - brief one-line descriptions are NOT acceptable
-- The report structure should be: Table of Contents, Executive Summary (5+ subsections), Test Scope (5+ subsections), Attack Surface Analysis (6+ subsections), Detailed Findings (multiple subsections - one per finding), Risk Assessment (6+ subsections), Recommendations (6+ subsections), Appendices (4+ subsections)
-- Generate the detailed report now following the exact structure above with ONLY real, complete information, ensuring AT LEAST 25 SECTIONS with 6-7 lines of content each:`
+COUNTS VALIDATION:
+6. Check Findings Register counts: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I], Total=[C+H+M+L+I]
+7. Verify: Section 1.3 table = Section 5.2 table = Findings Register counts (ALL must match exactly)
+8. CRITICAL: Count the number of "### 4.X" headings in Section 4 - this MUST equal the total in the register
+   - If register has 11 findings, Section 4 MUST have 11 "### 4.X" headings (4.1, 4.2, ..., 4.11)
+   - If register has 15 findings, Section 4 MUST have 15 "### 4.X" headings
+   - If counts don't match, you MUST generate the missing findings
+9. Verify: NO placeholder text like "(Continue with other findings...)" exists in Section 4
+10. Verify: Findings Register section is NOT included in the report (it's internal only)
+
+🚨 IF ANY CHECK FAILS: The report is INCOMPLETE. You MUST continue generating until ALL sections are present and ALL checks pass. Do NOT stop at section 6.2 or any other section - continue until ALL sections are complete.
+
+🚨 CRITICAL COMPLETION REQUIREMENT - DO NOT STOP UNTIL ALL SECTIONS ARE COMPLETE:
+
+MANDATORY SECTIONS THAT MUST BE INCLUDED (verify ALL are present):
+- Section 1: Executive Summary (with all subsections)
+- Section 2: Scope/Methodology (with all subsections 2.1-2.5)
+- Section 3: Attack Surface Analysis (with all subsections 3.1-3.6)
+- Section 4: Detailed Findings (ALL findings from register - one section per finding)
+- Section 5: Risk Assessment (with all subsections 5.1-5.6)
+- Section 6: Recommended Next Steps (with ALL subsections 6.1, 6.2, 6.3, 6.4, 6.5, 6.6)
+- Section 7: Appendices (with ALL subsections 7.1, 7.2, 7.3, 7.4)
+- Section 8: Closing Note (if applicable)
+
+DO NOT STOP GENERATING UNTIL:
+- [ ] Section 6.1 is complete
+- [ ] Section 6.2 is complete
+- [ ] Section 6.3 is complete
+- [ ] Section 6.4 (Remediation Priority Matrix) is complete with bullet points format
+- [ ] Section 6.5 (Implementation Roadmap) is complete with bullet points format
+- [ ] Section 6.6 (Success Metrics) is complete
+- [ ] Section 7.1 (Scope & Methodology Details) is complete
+- [ ] Section 7.2 (Technical References) is complete
+- [ ] Section 7.3 (Glossary) is complete
+- [ ] Section 7.4 (Additional Resources) is complete
+- [ ] Section 8 (Closing Note) is complete (if applicable)
+
+If you stop before completing ALL sections, the report is INCOMPLETE. Continue generating until EVERY section is finished.
+
+FINAL REMINDERS:
+- Replace ALL dates with: ${todayFormatted}
+- UK English spelling (colour, organise, centre, whilst, realise, optimise, analyse)
+- Write for executives - avoid jargon, no file paths, focus on business impact
+- NO placeholders like "[Contact]", "[TBD]" - omit sections without real data
+- Include shared responsibility education for third-party platforms (Shopify, Cloudflare, AWS, WordPress)
+- Add urgency with factual exploitation timelines in Business Impact sections
+- Report must have 25+ sections with 6-7 lines each - verify before submitting:`
 
     const prompt = finalPrompt
 
@@ -2322,7 +2524,7 @@ CRITICAL STRUCTURE AND CONTENT VERIFICATION:
         },
       ],
       temperature: 0.7,
-      max_tokens: request.pentestType === 'aggressive' ? 16000 : 8000, // Aggressive mode: 16000 tokens for extensive detail (8000-12000+ words). Soft mode: 8000 tokens (4000-5000 words)
+      max_tokens: request.pentestType === 'aggressive' ? 12000 : 10000, // Increased for soft to ensure all sections are generated
     }
 
     console.log('\n--- API REQUEST DETAILS ---')

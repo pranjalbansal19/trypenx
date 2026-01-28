@@ -329,6 +329,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     backgroundColor: '#F8F8FC',
     fontFamily: 'Helvetica',
+    flexDirection: 'column',
   },
   confidentialityPage: {
     padding: 50,
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
     borderStyle: 'solid',
     borderRadius: 4,
     padding: 18,
-    marginBottom: 12,
+    marginBottom: 16,
     marginTop: 8,
   },
   priorityMatrixTitle: {
@@ -510,7 +511,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: '#111827',
-    marginBottom: 10,
+    marginBottom: 12,
     letterSpacing: 0.1,
   },
   priorityMatrixText: {
@@ -518,8 +519,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#374151',
-    lineHeight: 1.7,
-    marginBottom: 6,
+    lineHeight: 1.8,
+    marginBottom: 8,
+    textAlign: 'left',
   },
   tocTitle: {
     fontSize: 28,
@@ -532,35 +534,38 @@ const styles = StyleSheet.create({
   tocItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
+    marginBottom: 12,
+    paddingBottom: 8,
+    paddingLeft: 20,
+    borderBottomWidth: 0.5,
     borderBottomColor: '#e5e7eb',
     borderBottomStyle: 'solid',
   },
   tocItemMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    marginTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1.5,
+    marginBottom: 14,
+    marginTop: 6,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
     borderBottomColor: '#d1d5db',
     borderBottomStyle: 'solid',
   },
   tocItemText: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#374151',
     flex: 1,
+    lineHeight: 1.6,
   },
   tocItemMainText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: '#111827',
     flex: 1,
+    lineHeight: 1.6,
   },
   tocItemPage: {
     fontSize: 13,
@@ -639,8 +644,8 @@ const styles = StyleSheet.create({
   // Pill/Badge styles for Severity and Priority - This style is called a "Badge" or "Pill" component
   // It features rounded corners, colored background with opacity, and matching border
   sevCritical: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)', // Red with lighter opacity
-    color: '#dc2626',
+    backgroundColor: 'rgba(84, 8, 30, 0.12)', // Deep maroon with lighter opacity
+    color: '#54081E',
     paddingTop: 4,
     paddingBottom: 4,
     paddingLeft: 12,
@@ -650,7 +655,25 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     fontFamily: 'Helvetica',
     borderWidth: 1,
-    borderColor: '#dc2626', // Red border
+    borderColor: '#54081E', // Maroon border
+    borderStyle: 'solid',
+    textTransform: 'capitalize',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sevInformational: {
+    backgroundColor: 'rgba(32, 172, 232, 0.16)', // Sky blue with lighter opacity
+    color: '#38bdf8',
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingLeft: 12,
+    paddingRight: 12,
+    borderRadius: 12,
+    fontSize: 10,
+    fontWeight: 700,
+    fontFamily: 'Helvetica',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
     borderStyle: 'solid',
     textTransform: 'capitalize',
     justifyContent: 'center',
@@ -870,7 +893,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 400,
     color: '#111827',
-    lineHeight: 1.5,
+    lineHeight: 1.6,
     borderRightWidth: 1,
     borderRightColor: '#9ca3af',
     borderRightStyle: 'solid',
@@ -882,6 +905,7 @@ const styles = StyleSheet.create({
     minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
+    overflow: 'hidden',
   },
   tableHeaderCell: {
     flex: 1,
@@ -903,6 +927,7 @@ const styles = StyleSheet.create({
     minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
+    overflow: 'hidden',
   },
   // Code block styles - Beautiful terminal-like appearance
   codeBlock: {
@@ -1153,30 +1178,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginLeft: 20,
   },
-  // Graph container styles
-  graphContainer: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderStyle: 'solid',
-    borderRadius: 8,
-    padding: 20,
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  graphTitle: {
-    fontSize: 14,
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    color: '#111827',
-    marginBottom: 16,
-  },
-  graphLabel: {
-    fontSize: 10,
-    fontFamily: 'Helvetica',
-    fontWeight: 400,
-    color: '#6b7280',
-  },
   graphBarContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1214,273 +1215,6 @@ const styles = StyleSheet.create({
 })
 
 // Severity Trend Graph Component
-function SeverityTrendGraph({
-  severitySummary,
-}: {
-  severitySummary: {
-    critical: number
-    high: number
-    medium: number
-    low: number
-  }
-}) {
-  // Use actual data from report
-  const rawData = [
-    {
-      label: 'Critical',
-      value: severitySummary.critical || 0,
-      color: '#dc2626',
-    },
-    {
-      label: 'High',
-      value: severitySummary.high || 0,
-      color: '#ea580c',
-    },
-    {
-      label: 'Medium',
-      value: severitySummary.medium || 0,
-      color: '#f59e0b',
-    },
-    {
-      label: 'Low',
-      value: severitySummary.low || 0,
-      color: '#16a34a',
-    },
-  ]
-
-  const totalVulnerabilities = rawData.reduce(
-    (sum, item) => sum + item.value,
-    0
-  )
-
-  // Calculate percentages and heights dynamically
-  const severityData = rawData.map((item) => {
-    const percentage =
-      totalVulnerabilities > 0 ? (item.value / totalVulnerabilities) * 100 : 0
-    // Height is based on percentage (0-100% maps to 0-100% of chart height)
-    const height = percentage
-    return {
-      ...item,
-      percentage: Math.round(percentage * 10) / 10, // Round to 1 decimal
-      height: Math.max(height, 5), // Minimum 5% height for visibility
-    }
-  })
-
-  const chartHeight = 180
-  const chartWidth = 500
-
-  return (
-    <View style={styles.graphContainer} wrap={false}>
-      <Text style={styles.graphTitle}>Severity Distribution Overview</Text>
-
-      {/* Chart Container - grid behind bars using fixed layout */}
-      <View style={{ marginBottom: 12 }} wrap={false}>
-        {/* Y-axis labels and chart row */}
-        <View style={{ flexDirection: 'row', marginBottom: 8 }} wrap={false}>
-          {/* Y-axis labels on left */}
-          <View
-            style={{ width: 50, alignItems: 'flex-end', paddingRight: 8 }}
-            wrap={false}
-          >
-            {[100, 75, 50, 25, 0].map((percent, i) => (
-              <Text
-                key={i}
-                style={{
-                  fontSize: 9,
-                  fontFamily: 'Helvetica',
-                  color: '#6b7280',
-                  height: 36,
-                  textAlign: 'right',
-                }}
-                wrap={false}
-              >
-                {percent}%
-              </Text>
-            ))}
-          </View>
-
-          {/* Chart area with fixed width for proper SVG rendering */}
-          <View
-            style={{
-              flex: 1,
-              height: chartHeight,
-              minWidth: 400,
-            }}
-            wrap={false}
-          >
-            {/* Grid lines and axes - rendered first (behind) using fixed coordinates */}
-            <Svg width={400} height={chartHeight}>
-              {/* Grid lines */}
-              {[0, 25, 50, 75, 100].map((percent, i) => {
-                const y = ((100 - percent) / 100) * chartHeight
-                return (
-                  <Line
-                    key={`grid-${i}`}
-                    x1="0"
-                    y1={y}
-                    x2="400"
-                    y2={y}
-                    stroke="#e5e7eb"
-                    strokeWidth="0.5"
-                  />
-                )
-              })}
-              {/* Y-axis line */}
-              <Line
-                x1="0"
-                y1="0"
-                x2="0"
-                y2={chartHeight}
-                stroke="#9ca3af"
-                strokeWidth="1"
-              />
-              {/* X-axis line */}
-              <Line
-                x1="0"
-                y1={chartHeight}
-                x2="400"
-                y2={chartHeight}
-                stroke="#9ca3af"
-                strokeWidth="1"
-              />
-            </Svg>
-
-            {/* Bars - rendered on top using negative margin to overlay */}
-            <View
-              style={{
-                flexDirection: 'row',
-                height: chartHeight,
-                alignItems: 'flex-end',
-                marginTop: -chartHeight,
-                paddingLeft: 2,
-                paddingRight: 2,
-                paddingBottom: 2,
-              }}
-              wrap={false}
-            >
-              {severityData.map((item, index) => {
-                const barHeight = (item.height / 100) * chartHeight
-                return (
-                  <View
-                    key={index}
-                    style={{
-                      flex: 1,
-                      marginHorizontal: 4,
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                    }}
-                    wrap={false}
-                  >
-                    {/* Value on top */}
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontFamily: 'Helvetica',
-                        fontWeight: 700,
-                        color: item.color,
-                        marginBottom: 4,
-                      }}
-                      wrap={false}
-                    >
-                      {item.value}
-                    </Text>
-                    {/* Bar */}
-                    <View
-                      style={{
-                        width: '100%',
-                        height: barHeight,
-                        backgroundColor: item.color,
-                        borderRadius: 4,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        minHeight: 20,
-                      }}
-                      wrap={false}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 9,
-                          fontFamily: 'Helvetica',
-                          fontWeight: 700,
-                          color: '#ffffff',
-                        }}
-                        wrap={false}
-                      >
-                        {item.percentage.toFixed(1)}%
-                      </Text>
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
-          </View>
-        </View>
-
-        {/* X-axis labels */}
-        <View
-          style={{ flexDirection: 'row', marginLeft: 50, marginTop: 8 }}
-          wrap={false}
-        >
-          {severityData.map((item, index) => (
-            <View
-              key={index}
-              style={{ flex: 1, marginHorizontal: 4, alignItems: 'center' }}
-              wrap={false}
-            >
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontFamily: 'Helvetica',
-                  fontWeight: 600,
-                  color: '#111827',
-                  textAlign: 'center',
-                }}
-                wrap={false}
-              >
-                {item.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Legend and Summary */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          marginTop: 8,
-          paddingTop: 12,
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-        }}
-        wrap={false}
-      >
-        <View style={{ flex: 1 }} wrap={false}>
-          <Text style={styles.graphLabel} wrap={false}>
-            Total Vulnerabilities:{' '}
-            <Text style={{ fontWeight: 700, color: '#111827' }}>
-              {totalVulnerabilities}
-            </Text>
-          </Text>
-        </View>
-        <View style={{ flex: 1 }} wrap={false}>
-          <Text style={styles.graphLabel} wrap={false}>
-            Assessment Date:{' '}
-            <Text style={{ fontWeight: 700, color: '#111827' }}>
-              {new Date().toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })}
-            </Text>
-          </Text>
-        </View>
-      </View>
-    </View>
-  )
-}
-
 export function ReportPdf({
   brandName,
   brandColor,
@@ -1496,7 +1230,11 @@ export function ReportPdf({
     s.title.toLowerCase().includes('table of contents')
   )
   const contentSections = data.sections.filter(
-    (s) => !s.title.toLowerCase().includes('table of contents')
+    (s) => 
+      !s.title.toLowerCase().includes('table of contents') &&
+      !s.title.toLowerCase().includes('findings register') &&
+      !s.content.toLowerCase().includes('findings register (internal') &&
+      !s.content.toLowerCase().includes('findings register - internal')
   )
 
   const renderLogo = () => {
@@ -1655,48 +1393,89 @@ export function ReportPdf({
           <Text style={styles.tocTitle}>Table of Contents</Text>
 
           {/* Parse and render TOC from AI content */}
-          {tocSection.content.split('\n').map((line, idx) => {
-            const trimmed = line.trim()
-            if (!trimmed || trimmed.startsWith('#') || trimmed === '')
+          <View wrap>
+            {(() => {
+              const tocLines = tocSection.content.split('\n')
+              const renderedItems = tocLines.map((line, idx) => {
+              const trimmed = line.trim()
+              if (!trimmed || trimmed.startsWith('#') || trimmed === '')
+                return null
+
+              // More flexible parsing - handle various formats
+              // Check for main sections (numbered like "1.", "1 ", or "Appendices")
+              const isMainSection =
+                trimmed.match(/^[-•*]?\s*\d+\.\s/) ||
+                trimmed.match(/^[-•*]?\s*\d+\s/) ||
+                trimmed.match(/^[-•*]?\s*Appendices/i) ||
+                trimmed.match(/^[-•*]?\s*[A-Z][^a-z]*$/i) // All caps main sections
+
+              // Check for subsections (indented or numbered like "1.1", "1.2", etc.)
+              const isSubSection =
+                trimmed.match(/^\s{2,}[-•*]/) || // Indented with spaces
+                trimmed.match(/^[-•*]?\s*\d+\.\d+/) || // Numbered like 1.1, 1.2
+                trimmed.match(/^[-•*]?\s*\d+\.\d+\.\d+/) // Numbered like 1.1.1
+
+              // Extract text and page number - handle various formats
+              const pageMatch = trimmed.match(/[-–—]\s*(?:Page\s+)?(\d+)$/i) ||
+                trimmed.match(/\s+(\d+)$/) // Just a number at the end
+              const pageNum = pageMatch ? pageMatch[1] : ''
+              
+              // Extract text - remove bullets, page numbers, and clean up
+              let text = trimmed
+                .replace(/[-–—]\s*(?:Page\s+)?\d+$/i, '') // Remove page numbers
+                .replace(/\s+\d+$/, '') // Remove trailing numbers
+                .replace(/^[-•*]\s*/, '') // Remove leading bullets
+                .replace(/^\s+/, '') // Remove leading spaces
+                .trim()
+
+              // If text starts with a number pattern, keep it
+              if (!text.match(/^\d+\./)) {
+                text = text.replace(/^\d+\s+/, '') // Remove leading number if not in pattern
+              }
+
+              if (!text || text.length < 2) return null
+
+              // Determine if it's a main section or subsection
+              // Main sections typically start with single digit or are all caps
+              const looksLikeMainSection = 
+                isMainSection || 
+                text.match(/^\d+\.\s+[A-Z]/) || // "1. Title"
+                (!isSubSection && text.length > 0)
+
+              if (looksLikeMainSection && !isSubSection) {
+                return (
+                  <View key={`toc-${idx}`} style={styles.tocItemMain} wrap>
+                    <Text style={styles.tocItemMainText} wrap>{text}</Text>
+                    {pageNum && (
+                      <Text style={styles.tocItemMainPage} wrap>{pageNum}</Text>
+                    )}
+                  </View>
+                )
+              } else {
+                return (
+                  <View key={`toc-${idx}`} style={styles.tocItem} wrap>
+                    <Text style={styles.tocItemText} wrap>{text}</Text>
+                    {pageNum && <Text style={styles.tocItemPage} wrap>{pageNum}</Text>}
+                  </View>
+                )
+              }
               return null
+            }).filter(Boolean)
 
-            // Check for main sections (numbered like "1." or "Appendices")
-            const isMainSection =
-              trimmed.match(/^[-•*]\s*\d+\.\s/) ||
-              trimmed.match(/^[-•*]\s*Appendices/i)
-            // Check for subsections (indented with spaces or dashes)
-            const isSubSection =
-              trimmed.match(/^\s+[-•*]/) || trimmed.match(/^[-•*]\s+\d+\.\d+/)
-
-            // Extract text and page number
-            const pageMatch = trimmed.match(/[-–—]\s*Page\s+(\d+)$/i)
-            const pageNum = pageMatch ? pageMatch[1] : ''
-            const text = trimmed
-              .replace(/[-–—]\s*Page\s+\d+$/i, '')
-              .replace(/^[-•*]\s*/, '')
-              .trim()
-
-            if (!text) return null
-
-            if (isMainSection) {
+            // If no items were rendered, show a message
+            if (renderedItems.length === 0) {
               return (
-                <View key={`toc-${idx}`} style={styles.tocItemMain}>
-                  <Text style={styles.tocItemMainText}>{text}</Text>
-                  {pageNum && (
-                    <Text style={styles.tocItemMainPage}>{pageNum}</Text>
-                  )}
-                </View>
-              )
-            } else if (isSubSection) {
-              return (
-                <View key={`toc-${idx}`} style={styles.tocItem}>
-                  <Text style={styles.tocItemText}>{text}</Text>
-                  {pageNum && <Text style={styles.tocItemPage}>{pageNum}</Text>}
+                <View wrap>
+                  <Text style={styles.paragraph} wrap>
+                    Table of contents will be generated automatically based on report sections.
+                  </Text>
                 </View>
               )
             }
-            return null
-          })}
+
+            return renderedItems
+            })()}
+          </View>
 
           {/* Footer with beautiful page number */}
           <View style={styles.contentFooter} fixed>
@@ -1987,36 +1766,136 @@ export function ReportPdf({
               titleLower.includes('remediation priority matrix') ||
               titleLower.includes('priority matrix') ||
               titleLower.includes('6.4')
+            // Only match Section 1.1 exactly - be very strict to avoid false positives
+            // Match if title starts with "1.1" or contains "what this scan is" (which should only be in 1.1)
             const isWhatThisScanSection =
-              titleLower.includes('what this scan is') ||
-              titleLower.includes('1.1')
+              titleLower.startsWith('1.1') ||
+              (titleLower.includes('what this scan is') && titleLower.includes('1.1'))
 
-            // Check if this is Risk Trend Analysis section - more flexible detection
-            const contentLower = String(s.content).toLowerCase()
-            const isRiskTrendSection =
-              titleLower.includes('risk trend') ||
-              titleLower.includes('trend analysis') ||
-              titleLower.includes('5.6') ||
-              (titleLower.includes('risk') && titleLower.includes('trend')) ||
-              contentLower.includes('risk trend analysis') ||
-              contentLower.includes('trend analysis indicates')
+            // Find the first regular text paragraph (not heading, bullet, table, code, etc.)
+            const findFirstParagraph = () => {
+              for (let i = 0; i < processedContent.length; i++) {
+                const item = processedContent[i]
+                if (item && item.type === 'text') {
+                  const line = item.content as string
+                  if (!line.trim()) continue
+                  const processed = processMarkdownLine(line)
+                  // Skip headings, bullets, and special content
+                  if (
+                    !processed.isHeading &&
+                    !processed.isBullet &&
+                    !processed.isCodeFence &&
+                    !processed.isTable
+                  ) {
+                    // Check if it's not a special field (severity, observation, etc.)
+                    const isSpecialField =
+                      /^\*\*(Severity|Observation|Priority):\*\*/i.test(
+                        line.trim()
+                      ) || /Overall Risk Rating:/i.test(line.trim())
+                    if (!isSpecialField) {
+                      return i
+                    }
+                  }
+                }
+              }
+              return -1
+            }
+
+            const firstParagraphIndex = findFirstParagraph()
 
             return (
               <View key={s.key} wrap={false}>
-                {/* Section title */}
-                <Text style={styles.sectionTitle} wrap>
-                  {s.title}
-                </Text>
-                {/* Render severity graph for Risk Trend Analysis section - right after title */}
-                {isRiskTrendSection && (
-                  <View
-                    style={{ marginTop: 12, marginBottom: 20 }}
-                    wrap={false}
-                  >
-                    <SeverityTrendGraph
-                      severitySummary={data.severitySummary}
-                    />
+                {/* Section title + first paragraph wrapped together */}
+                {firstParagraphIndex >= 0 ? (
+                  <View wrap={false}>
+                    <Text style={styles.sectionTitle} wrap={false}>
+                      {s.title}
+                    </Text>
+                    {(() => {
+                      const firstItem = processedContent[firstParagraphIndex]
+                      if (!firstItem) return null
+                      const line = firstItem.content as string
+                      const processed = processMarkdownLine(line)
+
+                      // Check if it's a subheading
+                      const subheadingPatterns = [
+                        /^(Description|Business Impact|What Was Found|Affected Systems|Risk Scenario|Recommendation|Recommendations|Vulnerable Systems|Evidence|Impact|Remediation|Technical Details|Attack Vector|Proof of Concept|References|CVSS Score|CVE|Affected Components|Root Cause|Detection|Mitigation|Prevention|Additional Notes|Summary|Details|Overview|Background|Context|Solution|Workaround):\s*/i,
+                      ]
+                      const isSubheading = subheadingPatterns.some((pattern) =>
+                        pattern.test(processed.text)
+                      )
+
+                      if (isSubheading) {
+                        const match = processed.text.match(/^([^:]+):\s*(.*)$/i)
+                        if (match) {
+                          const [, label, content] = match
+                          return (
+                            <View style={{ marginBottom: 12, marginTop: 4 }}>
+                              <Text style={styles.paragraph} wrap={false}>
+                                <Text
+                                  style={{
+                                    fontFamily: 'Helvetica',
+                                    fontWeight: 700,
+                                    color: '#111827',
+                                  }}
+                                >
+                                  {label}:
+                                </Text>
+                                {content && (
+                                  <Text
+                                    style={{
+                                      fontFamily: 'Helvetica',
+                                      fontWeight: 400,
+                                      color: '#1f2937',
+                                    }}
+                                  >
+                                    {' '}
+                                    {content}
+                                  </Text>
+                                )}
+                              </Text>
+                            </View>
+                          )
+                        }
+                      }
+
+                      // Handle inline bold
+                      if (processed.hasInlineBold) {
+                        const segments = parseInlineBold(processed.text)
+                        return (
+                          <View style={{ marginBottom: 10 }}>
+                            <Text style={styles.paragraph} wrap={false}>
+                              {segments.map((segment, idx) => (
+                                <Text
+                                  key={idx}
+                                  style={
+                                    segment.bold
+                                      ? [styles.paragraph, styles.boldText]
+                                      : styles.paragraph
+                                  }
+                                >
+                                  {segment.text}
+                                </Text>
+                              ))}
+                            </Text>
+                          </View>
+                        )
+                      }
+
+                      // Regular text
+                      return (
+                        <View style={{ marginBottom: 10 }}>
+                          <Text style={styles.paragraph} wrap={false}>
+                            {processed.text.replace(/\*\*/g, '')}
+                          </Text>
+                        </View>
+                      )
+                    })()}
                   </View>
+                ) : (
+                  <Text style={styles.sectionTitle} wrap={false}>
+                    {s.title}
+                  </Text>
                 )}
                 <View wrap={false}>
                   {/* Special rendering for What This Scan Is section */}
@@ -2267,8 +2146,8 @@ export function ReportPdf({
                       })()}
                     </View>
                   )}
-                  {/* Special rendering for Roadmap and Priority Matrix sections */}
-                  {(isRoadmapSection || isPriorityMatrixSection) && (
+                  {/* Special rendering for Roadmap sections only - Priority Matrix now uses normal markdown */}
+                  {isRoadmapSection && (
                     <View wrap={false}>
                       {(() => {
                         // Process content to group roadmap weeks together
@@ -2565,27 +2444,34 @@ export function ReportPdf({
                             const content = foundItem
                               ? foundItem.data.content
                               : []
-                            const hasContent = content.length > 0
+                            const hasContent = Array.isArray(content) && content.length > 0
 
                             rendered.push(
                               <View
                                 key={`priority-${level.priority}`}
                                 style={styles.priorityMatrixCard}
-                                wrap={false}
+                                wrap
                               >
-                                <Text style={styles.priorityMatrixTitle}>
+                                <Text style={styles.priorityMatrixTitle} wrap>
                                   {level.priority} ({level.timeframe})
                                 </Text>
                                 {hasContent ? (
-                                  content.map((text: string, idx: number) => (
-                                    <Text
-                                      key={idx}
-                                      style={styles.priorityMatrixText}
-                                      wrap
-                                    >
-                                      • {text}
-                                    </Text>
-                                  ))
+                                  <View wrap>
+                                    {content.map((text: string, idx: number) => (
+                                      <Text
+                                        key={idx}
+                                        style={[
+                                          styles.priorityMatrixText,
+                                          idx < content.length - 1
+                                            ? { marginBottom: 8 }
+                                            : { marginBottom: 0 },
+                                        ]}
+                                        wrap
+                                      >
+                                        {text}
+                                      </Text>
+                                    ))}
+                                  </View>
                                 ) : (
                                   <Text style={styles.priorityMatrixText} wrap>
                                     {level.priority === 'Critical'
@@ -2656,11 +2542,15 @@ export function ReportPdf({
                       })()}
                     </View>
                   )}
-                  {/* Process regular content - skip if cards were already rendered for roadmap/priority/whatThisScan sections */}
+                  {/* Process regular content - skip if cards were already rendered for roadmap/whatThisScan sections */}
+                  {/* Priority Matrix now uses normal markdown rendering */}
                   {!isRoadmapSection &&
-                    !isPriorityMatrixSection &&
                     !isWhatThisScanSection &&
-                    processedContent.map((item) => {
+                    processedContent.map((item, itemIndex) => {
+                      // Skip the first paragraph since it's already rendered with the title
+                      if (itemIndex === firstParagraphIndex) {
+                        return null
+                      }
                       // Handle page break
                       if (item.type === 'pagebreak') {
                         return <View key={item.key} break />
@@ -2692,19 +2582,24 @@ export function ReportPdf({
                                   {row.map((cell, cellIndex) => {
                                     const isLastCell =
                                       cellIndex === row.length - 1
-                                    const cellStyle = isHeader
-                                      ? isLastCell
-                                        ? [
-                                            styles.tableHeaderCell,
-                                            { borderRightWidth: 0 },
-                                          ]
-                                        : styles.tableHeaderCell
-                                      : isLastCell
-                                      ? [
-                                          styles.tableCell,
-                                          { borderRightWidth: 0 },
-                                        ]
+                                    // For 2-column tables (like glossary), set specific widths
+                                    const isTwoColumnTable = rows[0]?.length === 2
+                                    const columnWidthStyle = isTwoColumnTable
+                                      ? cellIndex === 0
+                                        ? { width: '35%' as const, flex: 0 }
+                                        : { width: '65%' as const, flex: 0 }
+                                      : {}
+                                    
+                                    const baseCellStyle = isHeader
+                                      ? styles.tableHeaderCell
                                       : styles.tableCell
+                                    
+                                    const cellStyle = [
+                                      baseCellStyle,
+                                      isLastCell ? { borderRightWidth: 0 } : {},
+                                      columnWidthStyle,
+                                    ]
+                                    
                                     // Remove asterisks and detect if text should be bold
                                     const cleanCell = cell
                                       .replace(/\*\*/g, '')
@@ -2733,9 +2628,10 @@ export function ReportPdf({
                                           const severityValue =
                                             cleanCell.toUpperCase()
                                           if (
-                                            severityValue.includes(
-                                              'CRITICAL'
-                                            ) ||
+                                            severityValue.includes('CRITICAL')
+                                          ) {
+                                            severityColor = '#54081E' // Maroon
+                                          } else if (
                                             severityValue.includes('HIGH')
                                           ) {
                                             severityColor = '#dc2626' // Red
@@ -2747,6 +2643,13 @@ export function ReportPdf({
                                             severityValue.includes('LOW')
                                           ) {
                                             severityColor = '#16a34a' // Green
+                                          } else if (
+                                            severityValue.includes(
+                                              'INFORMATIONAL'
+                                            ) ||
+                                            severityValue === 'INFO'
+                                          ) {
+                                            severityColor = '#38bdf8' // Sky blue
                                           }
                                         }
                                       }
@@ -2756,6 +2659,7 @@ export function ReportPdf({
                                       <View
                                         key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
                                         style={cellStyle}
+                                        wrap
                                       >
                                         <Text
                                           style={{
@@ -2768,7 +2672,7 @@ export function ReportPdf({
                                             color: isHeader
                                               ? '#ffffff'
                                               : severityColor || '#111827',
-                                            lineHeight: 1.5,
+                                            lineHeight: 1.6,
                                           }}
                                           wrap
                                         >
@@ -2920,7 +2824,10 @@ export function ReportPdf({
                                                   if (
                                                     severityValue.includes(
                                                       'CRITICAL'
-                                                    ) ||
+                                                    )
+                                                  ) {
+                                                    severityColor = '#54081E' // Maroon
+                                                  } else if (
                                                     severityValue.includes(
                                                       'HIGH'
                                                     )
@@ -2938,6 +2845,13 @@ export function ReportPdf({
                                                     )
                                                   ) {
                                                     severityColor = '#16a34a' // Green
+                                                  } else if (
+                                                    severityValue.includes(
+                                                      'INFORMATIONAL'
+                                                    ) ||
+                                                    severityValue === 'INFO'
+                                                  ) {
+                                                    severityColor = '#38bdf8' // Sky blue
                                                   }
                                                 }
                                               }
@@ -3031,16 +2945,16 @@ export function ReportPdf({
 
                       // Check if this is a Severity, Observation, or Priority field with pill styling
                       const severityMatch = line.match(
-                        /^\*\*Severity:\*\*\s*(Critical|High|Medium|Low)/i
+                        /^\*\*Severity:\*\*\s*(Critical|High|Medium|Low|Informational)/i
                       )
                       const observationMatch = line.match(
-                        /^\*\*Observation:\*\*\s*(High|Medium|Low)/i
+                        /^\*\*Observation:\*\*\s*(Critical|High|Medium|Low|Informational)/i
                       )
                       const priorityMatch = line.match(
-                        /^\*\*Priority:\*\*\s*(Critical|High|Medium|Low)/i
+                        /^\*\*Priority:\*\*\s*(Critical|High|Medium|Low|Informational)/i
                       )
                       const riskRatingMatch = line.match(
-                        /Overall Risk Rating:\s*(Critical|High|Medium|Low)/i
+                        /Overall Risk Rating:\s*(Critical|High|Medium|Low|Informational)/i
                       )
 
                       if (
@@ -3064,15 +2978,16 @@ export function ReportPdf({
 
                         // Determine pill style based on value
                         let pillStyle = styles.sevMedium // Default
-                        if (
-                          valueLower === 'critical' ||
-                          valueLower === 'high'
-                        ) {
+                        if (valueLower === 'critical') {
+                          pillStyle = styles.sevCritical
+                        } else if (valueLower === 'high') {
                           pillStyle = styles.sevHigh
                         } else if (valueLower === 'medium') {
                           pillStyle = styles.sevMedium
                         } else if (valueLower === 'low') {
                           pillStyle = styles.sevLow
+                        } else if (valueLower === 'informational') {
+                          pillStyle = styles.sevInformational
                         }
 
                         // Capitalize the value (Title Case)
@@ -3084,16 +2999,16 @@ export function ReportPdf({
                           <View
                             key={item.key}
                             style={{
-                              marginBottom: 10,
+                              marginBottom: 12,
+                              marginTop: 4,
                               flexDirection: 'row',
                               alignItems: 'center',
-                              flexWrap: 'nowrap',
                             }}
-                            wrap={false}
+                            wrap
                           >
                             <View
                               style={pillStyle || styles.sevMedium}
-                              wrap={false}
+                              wrap
                             >
                               <Text
                                 style={{
@@ -3101,7 +3016,7 @@ export function ReportPdf({
                                   fontWeight: 700,
                                   fontFamily: 'Helvetica',
                                   color: (pillStyle || styles.sevMedium).color,
-                                  lineHeight: 1,
+                                  lineHeight: 1.2,
                                 }}
                                 wrap
                               >
@@ -3130,10 +3045,10 @@ export function ReportPdf({
                           <View
                             key={item.key}
                             style={{
-                              marginBottom: 2,
-                              marginTop: processed.level <= 3 ? 8 : 4,
+                              marginBottom: 12,
+                              marginTop: processed.level <= 3 ? 16 : 8,
                             }}
-                            wrap={false}
+                            wrap
                           >
                             <Text style={headingStyle} wrap>
                               {processed.text}
@@ -3148,8 +3063,8 @@ export function ReportPdf({
                           return (
                             <View
                               key={item.key}
-                              style={{ marginBottom: 6 }}
-                              wrap={false}
+                              style={{ marginBottom: 8 }}
+                              wrap
                             >
                               <Text style={styles.bulletPoint} wrap>
                                 •{' '}
@@ -3172,8 +3087,8 @@ export function ReportPdf({
                         return processed.isBold ? (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 6 }}
-                            wrap={false}
+                            style={{ marginBottom: 8 }}
+                            wrap
                           >
                             <Text
                               style={[styles.bulletPoint, styles.boldText]}
@@ -3185,8 +3100,8 @@ export function ReportPdf({
                         ) : (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 6 }}
-                            wrap={false}
+                            style={{ marginBottom: 8 }}
+                            wrap
                           >
                             <Text style={styles.bulletPoint} wrap>
                               • {processed.text.replace(/\*\*/g, '')}
@@ -3210,8 +3125,8 @@ export function ReportPdf({
                           return (
                             <View
                               key={item.key}
-                              style={{ marginBottom: 10 }}
-                              wrap={false}
+                              style={{ marginBottom: 12, marginTop: 4 }}
+                              wrap
                             >
                               <Text style={styles.paragraph} wrap>
                                 <Text
@@ -3247,8 +3162,8 @@ export function ReportPdf({
                         return (
                           <View
                             key={item.key}
-                            style={{ marginBottom: 8 }}
-                            wrap={false}
+                            style={{ marginBottom: 10 }}
+                            wrap
                           >
                             <Text style={styles.paragraph} wrap>
                               {segments.map((segment, idx) => (
@@ -3271,8 +3186,8 @@ export function ReportPdf({
                       return (
                         <View
                           key={item.key}
-                          style={{ marginBottom: 8 }}
-                          wrap={false}
+                          style={{ marginBottom: 10 }}
+                          wrap
                         >
                           <Text style={styles.paragraph} wrap>
                             {processed.text.replace(/\*\*/g, '')}
