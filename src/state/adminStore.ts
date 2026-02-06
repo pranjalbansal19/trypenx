@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type {
   Customer,
+  CustomerConsent,
+  CustomerNote,
   Scope,
   TestConfiguration,
   TestRun,
@@ -15,6 +17,8 @@ interface AdminState {
   testConfigs: Record<string, TestConfiguration | null> // customerId -> config
   testRuns: Record<string, TestRun[]> // customerId -> runs
   reports: Record<string, Report[]> // customerId -> reports
+  consents: Record<string, CustomerConsent[]> // customerId -> consent docs
+  notes: Record<string, CustomerNote[]> // customerId -> notes (timestamped list)
   allReports: Report[]
 
   // UI state
@@ -52,6 +56,14 @@ interface AdminState {
   loadAllReports: () => Promise<void>
   updateReport: (id: string, data: Partial<Report>) => Promise<void>
 
+  loadConsents: (customerId: string) => Promise<void>
+  uploadConsent: (customerId: string, file: File, agreedAt?: string) => Promise<CustomerConsent>
+  deleteConsent: (id: string, customerId: string) => Promise<void>
+
+  loadNotes: (customerId: string) => Promise<void>
+  addNote: (customerId: string, content: string) => Promise<CustomerNote>
+  deleteNote: (id: string, customerId: string) => Promise<void>
+
   setSelectedCustomerId: (id: string | null) => void
   setError: (error: string | null) => void
 }
@@ -63,6 +75,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   testConfigs: {},
   testRuns: {},
   reports: {},
+  consents: {},
+  notes: {},
   allReports: [],
   selectedCustomerId: null,
   loading: false,
@@ -86,11 +100,13 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       const customer = await adminApi.getCustomerById(id)
       if (!customer) throw new Error('Customer not found')
 
-      const [scopes, testConfig, testRuns, reports] = await Promise.all([
+      const [scopes, testConfig, testRuns, reports, consents, notes] = await Promise.all([
         adminApi.getScopesByCustomerId(id),
         adminApi.getTestConfigByCustomerId(id),
         adminApi.getTestRunsByCustomerId(id),
         adminApi.getReportsByCustomerId(id),
+        adminApi.getConsentsByCustomerId(id),
+        adminApi.getNotesByCustomerId(id),
       ])
 
       set((state) => ({
@@ -98,6 +114,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         testConfigs: { ...state.testConfigs, [id]: testConfig },
         testRuns: { ...state.testRuns, [id]: testRuns },
         reports: { ...state.reports, [id]: reports },
+        consents: { ...state.consents, [id]: consents },
+        notes: { ...state.notes, [id]: notes },
         loading: false,
       }))
     } catch (error) {
@@ -143,6 +161,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         testConfigs: { ...state.testConfigs, [id]: null },
         testRuns: { ...state.testRuns, [id]: [] },
         reports: { ...state.reports, [id]: [] },
+        consents: { ...state.consents, [id]: [] },
+        notes: { ...state.notes, [id]: [] },
         loading: false,
       }))
     } catch (error) {
@@ -300,6 +320,100 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             reports.map((r) => (r.id === id ? updated : r)),
           ])
         ),
+        loading: false,
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false })
+    }
+  },
+
+  loadConsents: async (customerId) => {
+    try {
+      const consents = await adminApi.getConsentsByCustomerId(customerId)
+      set((state) => ({
+        consents: { ...state.consents, [customerId]: consents },
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  uploadConsent: async (customerId, file, agreedAt) => {
+    set({ loading: true, error: null })
+    try {
+      const consent = await adminApi.uploadConsent(customerId, file, agreedAt)
+      set((state) => ({
+        consents: {
+          ...state.consents,
+          [customerId]: [consent, ...(state.consents[customerId] || [])],
+        },
+        loading: false,
+      }))
+      return consent
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false })
+      throw error
+    }
+  },
+
+  deleteConsent: async (id, customerId) => {
+    set({ loading: true, error: null })
+    try {
+      await adminApi.deleteConsent(id)
+      set((state) => ({
+        consents: {
+          ...state.consents,
+          [customerId]: (state.consents[customerId] || []).filter(
+            (c) => c.id !== id
+          ),
+        },
+        loading: false,
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false })
+    }
+  },
+
+  loadNotes: async (customerId) => {
+    try {
+      const notes = await adminApi.getNotesByCustomerId(customerId)
+      set((state) => ({
+        notes: { ...state.notes, [customerId]: notes },
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  addNote: async (customerId, content) => {
+    set({ loading: true, error: null })
+    try {
+      const note = await adminApi.createNote({ customerId, content })
+      set((state) => ({
+        notes: {
+          ...state.notes,
+          [customerId]: [note, ...(state.notes[customerId] || [])],
+        },
+        loading: false,
+      }))
+      return note
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false })
+      throw error
+    }
+  },
+
+  deleteNote: async (id, customerId) => {
+    set({ loading: true, error: null })
+    try {
+      await adminApi.deleteNote(id)
+      set((state) => ({
+        notes: {
+          ...state.notes,
+          [customerId]: (state.notes[customerId] || []).filter(
+            (n) => n.id !== id
+          ),
+        },
         loading: false,
       }))
     } catch (error) {

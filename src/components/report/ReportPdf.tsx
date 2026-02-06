@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 400,
     lineHeight: 1.8,
-    marginBottom: 12,
+    marginBottom: 14,
     color: '#1f2937',
     fontSize: 11,
     textAlign: 'left',
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 400,
     lineHeight: 1.8,
-    marginBottom: 8,
+    marginBottom: 10,
     color: '#1f2937',
     fontSize: 11,
     marginLeft: 16,
@@ -860,7 +860,6 @@ const styles = StyleSheet.create({
     borderColor: '#9ca3af',
     borderStyle: 'solid',
     width: '100%',
-    overflow: 'hidden',
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
@@ -905,7 +904,6 @@ const styles = StyleSheet.create({
     minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
-    overflow: 'hidden',
   },
   tableHeaderCell: {
     flex: 1,
@@ -927,7 +925,6 @@ const styles = StyleSheet.create({
     minWidth: 100,
     flexShrink: 1,
     flexGrow: 1,
-    overflow: 'hidden',
   },
   // Code block styles - Beautiful terminal-like appearance
   codeBlock: {
@@ -3046,7 +3043,7 @@ export function ReportPdf({
                             key={item.key}
                             style={{
                               marginBottom: 12,
-                              marginTop: processed.level <= 3 ? 16 : 8,
+                              marginTop: processed.level <= 3 ? 22 : 14,
                             }}
                             wrap
                           >

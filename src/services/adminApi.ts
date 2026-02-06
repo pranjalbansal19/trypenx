@@ -1,5 +1,7 @@
 import type {
   Customer,
+  CustomerConsent,
+  CustomerNote,
   Scope,
   TestConfiguration,
   TestRun,
@@ -18,6 +20,8 @@ let scopesStore: Scope[] = []
 let testConfigsStore: TestConfiguration[] = []
 let testRunsStore: TestRun[] = []
 let reportsStore: Report[] = []
+let consentStore: CustomerConsent[] = []
+let notesStore: CustomerNote[] = []
 
 // Generate IDs
 function generateId(): string {
@@ -68,9 +72,42 @@ export async function updateCustomer(
 export async function deleteCustomer(id: string): Promise<void> {
   await delay()
   customersStore = customersStore.filter((c) => c.id !== id)
-  // Also delete related scopes, configs, etc.
   scopesStore = scopesStore.filter((s) => s.customerId !== id)
   testConfigsStore = testConfigsStore.filter((tc) => tc.customerId !== id)
+  consentStore = consentStore.filter((c) => c.customerId !== id)
+  notesStore = notesStore.filter((n) => n.customerId !== id)
+}
+
+// Customer notes (timestamped list, like a to-do list)
+export async function getNotesByCustomerId(
+  customerId: string
+): Promise<CustomerNote[]> {
+  await delay()
+  return notesStore
+    .filter((n) => n.customerId === customerId)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+}
+
+export async function createNote(
+  data: Omit<CustomerNote, 'id' | 'createdAt'>
+): Promise<CustomerNote> {
+  await delay()
+  const now = new Date().toISOString()
+  const note: CustomerNote = {
+    ...data,
+    id: generateId(),
+    createdAt: now,
+  }
+  notesStore.push(note)
+  return note
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await delay()
+  notesStore = notesStore.filter((n) => n.id !== id)
 }
 
 // Scopes API
@@ -255,6 +292,54 @@ export async function updateReport(
   } as Report
   reportsStore[index] = updated
   return updated
+}
+
+// Customer consents (signed VAA / pen test agreement documents)
+export async function getConsentsByCustomerId(
+  customerId: string
+): Promise<CustomerConsent[]> {
+  await delay()
+  return consentStore
+    .filter((c) => c.customerId === customerId)
+    .sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    )
+}
+
+export async function uploadConsent(
+  customerId: string,
+  file: File,
+  agreedAt?: string // optional "signed at" date; defaults to now
+): Promise<CustomerConsent> {
+  await delay()
+  const now = new Date().toISOString()
+  const agreedDate = agreedAt || now
+  const fileData = await fileToDataUrl(file)
+  const consent: CustomerConsent = {
+    id: generateId(),
+    customerId,
+    fileName: file.name,
+    agreedAt: agreedDate,
+    uploadedAt: now,
+    fileData,
+  }
+  consentStore.push(consent)
+  return consent
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+export async function deleteConsent(id: string): Promise<void> {
+  await delay()
+  consentStore = consentStore.filter((c) => c.id !== id)
 }
 
 // Helper: Get last and next run for a customer

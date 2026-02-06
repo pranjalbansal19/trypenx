@@ -19,6 +19,27 @@ export interface Customer {
   updatedAt: string
 }
 
+/** A single timestamped note for a customer (shown like a to-do list) */
+export interface CustomerNote {
+  id: string
+  customerId: string
+  content: string
+  createdAt: string // ISO date-time
+}
+
+/** Signed consent document (e.g. VAA / pen test agreement) for a customer */
+export interface CustomerConsent {
+  id: string
+  customerId: string
+  fileName: string
+  /** When the document was agreed/signed (displayed as "Signed at") */
+  agreedAt: string // ISO date
+  /** When the file was uploaded to the portal */
+  uploadedAt: string // ISO date
+  /** Stored file: base64 data URL for in-memory demo; in production would be a URL to blob storage */
+  fileData: string
+}
+
 export interface Scope {
   id: string
   customerId: string
