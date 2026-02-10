@@ -46,24 +46,24 @@ export function ValidateDomainPage() {
 
 	return (
 		<div className="container-max py-12">
-			<h2 className="text-2xl font-semibold mb-6">Validate ownership of {domain || 'your domain'}</h2>
+			<h2 className="text-2xl font-semibold mb-6 text-slate-900">Validate ownership of {domain || 'your domain'}</h2>
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 				<div className="glass rounded-xl p-6 space-y-4">
-					<div className="flex items-center gap-2 font-medium"><AtSign className="text-brand" /> Email validation</div>
-					<p className="text-sm text-white/70">We will send a link to admin@{domain || 'yourdomain.com'}.</p>
+					<div className="flex items-center gap-2 font-medium text-slate-900"><AtSign className="text-brand" /> Email validation</div>
+					<p className="text-sm text-gray-600">We will send a link to admin@{domain || 'yourdomain.com'}.</p>
 					<button className="btn btn-outline" onClick={sendEmail} disabled={!domain || emailSent}>
 						{emailSent ? <Check size={16} /> : null} {emailSent ? 'Sent' : 'Send validation email'}
 					</button>
 				</div>
 				<div className="glass rounded-xl p-6 space-y-4">
-					<div className="flex items-center gap-2 font-medium"><Network className="text-brand" /> DNS TXT record</div>
-					<p className="text-sm text-white/70">Create a TXT record:</p>
-					<pre className="bg-black/30 rounded-md p-3 text-xs overflow-auto">_cybersentry.{domain || 'yourdomain.com'}  TXT  "CS-VERIFY-xxxxxxxx"</pre>
-					<input value={dnsToken} onChange={(e)=>setDnsToken(e.target.value)} placeholder="Paste token value" className="w-full rounded-md bg-white/5 border border-white/10 px-3 py-2 outline-none focus:border-brand" />
+					<div className="flex items-center gap-2 font-medium text-slate-900"><Network className="text-brand" /> DNS TXT record</div>
+					<p className="text-sm text-gray-600">Create a TXT record:</p>
+					<pre className="bg-slate-100 rounded-md p-3 text-xs overflow-auto text-slate-800 border border-slate-200">_cybersentry.{domain || 'yourdomain.com'}  TXT  "CS-VERIFY-xxxxxxxx"</pre>
+					<input value={dnsToken} onChange={(e)=>setDnsToken(e.target.value)} placeholder="Paste token value" className="w-full rounded-md bg-white border border-slate-200 px-3 py-2 outline-none focus:border-brand text-slate-900" />
 					<button onClick={verifyDns} className="btn btn-primary" disabled={!dnsToken || verifying}>
 						{verifying ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />} Verify & Start Scan
 					</button>
-					{verified ? <p className="text-sm text-emerald-400 flex items-center gap-2"><Check size={14}/> Verified</p> : null}
+					{verified ? <p className="text-sm text-emerald-600 flex items-center gap-2"><Check size={14}/> Verified</p> : null}
 				</div>
 			</div>
 		</div>

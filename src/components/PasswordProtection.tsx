@@ -39,8 +39,8 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
   // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white/60">Loading...</div>
+      <div className="min-h-screen bg-[#f4f6fb] flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
       </div>
     )
   }
@@ -48,7 +48,7 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
   // Show password prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#f4f6fb] flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="glass rounded-xl p-8 space-y-6">
             {/* Logo and Title */}
@@ -57,10 +57,10 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
                 <ShieldCheck className="text-brand" size={32} />
               </div>
               <div className="text-center">
-                <h1 className="text-2xl font-bold text-white mb-2">
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">
                   Password Protected
                 </h1>
-                <p className="text-sm text-white/70">
+                <p className="text-sm text-gray-600">
                   This application is password protected. Please enter the password to continue.
                 </p>
               </div>
@@ -71,13 +71,13 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-white/90 mb-2"
+                  className="block text-sm font-medium text-slate-700 mb-2"
                 >
                   Password
                 </label>
                 <div className="relative">
                   <Lock
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40"
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                     size={18}
                   />
                   <input
@@ -89,12 +89,12 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
                       setError('')
                     }}
                     placeholder="Enter password"
-                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                     autoFocus
                   />
                 </div>
                 {error && (
-                  <p className="mt-2 text-sm text-red-400">{error}</p>
+                  <p className="mt-2 text-sm text-red-600">{error}</p>
                 )}
               </div>
 
@@ -108,8 +108,8 @@ export function PasswordProtection({ children }: PasswordProtectionProps) {
             </form>
 
             {/* Security Notice */}
-            <div className="pt-4 border-t border-white/10">
-              <p className="text-xs text-white/50 text-center">
+            <div className="pt-4 border-t border-slate-200">
+              <p className="text-xs text-gray-500 text-center">
                 Unauthorized access is prohibited. This system is monitored.
               </p>
             </div>

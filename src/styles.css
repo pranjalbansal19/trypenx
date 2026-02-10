@@ -2,17 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* App base styles */
+/* App base styles - light theme aligned with Admin Control Center */
 :root {
-	--bg: 12 8 24; /* slate-950 */
+	--bg: 244 246 251; /* #f4f6fb */
 }
 
 body {
-	@apply bg-slate-950 text-slate-100 antialiased;
+	@apply bg-[#f4f6fb] text-slate-900 antialiased;
 }
 
 .glass {
-	@apply bg-white/5 backdrop-blur-md border border-white/10 shadow-soft;
+	@apply bg-white border border-slate-200/80 shadow-sm backdrop-blur;
 }
 
 .container-max {
@@ -24,15 +24,15 @@ body {
 }
 
 .btn-primary {
-	@apply bg-brand text-slate-950 hover:bg-brand-dark;
+	@apply bg-brand text-slate-900 hover:bg-brand-dark;
 }
 
 .btn-outline {
-	@apply border border-white/20 hover:border-white/40;
+	@apply border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50;
 }
 
 .badge {
-	@apply inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/90;
+	@apply inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-1 text-xs font-medium text-slate-700;
 }
 
 @keyframes toast-in {
@@ -92,4 +92,20 @@ body {
 
 .card-rise {
 	animation: card-rise 0.5s ease-out both;
+}
+
+@keyframes icon-wave {
+	0%, 100% {
+		transform: rotate(0deg);
+	}
+	25% {
+		transform: rotate(14deg);
+	}
+	75% {
+		transform: rotate(-14deg);
+	}
+}
+
+.icon-wave {
+	animation: icon-wave 1.4s ease-in-out infinite;
 }

@@ -28,7 +28,7 @@ export function DashboardPage() {
 	return (
 		<div className="container-max py-12 space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold">Dashboard — {domain}</h2>
+                <h2 className="text-2xl font-semibold text-slate-900">Dashboard — {domain}</h2>
                 <div className="flex items-center gap-3 flex-wrap">
                     {data && (
                         <PDFDownloadLink
@@ -44,17 +44,17 @@ export function DashboardPage() {
             </div>
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<div className="glass rounded-xl p-6">
-					<p className="text-sm text-white/70">Latest AI Pen Test Score</p>
-					<p className="text-5xl font-bold mt-2">{score}</p>
+					<p className="text-sm text-gray-600">Latest AI Pen Test Score</p>
+					<p className="text-5xl font-bold mt-2 text-slate-900">{score}</p>
 				</div>
 				<div className="lg:col-span-2 glass rounded-xl p-6">
-					<p className="text-sm text-white/70 mb-3">Risk Score Trend</p>
+					<p className="text-sm text-gray-600 mb-3">Risk Score Trend</p>
 					<div className="h-56">
 						<ResponsiveContainer width="100%" height="100%">
 							<LineChart data={trendData}>
-								<XAxis dataKey="label" stroke="#94a3b8"/>
-								<YAxis domain={[0, 100]} stroke="#94a3b8"/>
-								<Tooltip contentStyle={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.1)' }} />
+								<XAxis dataKey="label" stroke="#64748b"/>
+								<YAxis domain={[0, 100]} stroke="#64748b"/>
+								<Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
 								<Line type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={2} dot={false} />
 							</LineChart>
 						</ResponsiveContainer>
@@ -63,12 +63,12 @@ export function DashboardPage() {
 			</div>
 			<div className="glass rounded-xl p-6">
 				<div className="flex items-center justify-between">
-					<h3 className="font-semibold">Vulnerabilities</h3>
-					<div className="text-xs text-white/60">{vulnerabilities.length} found</div>
+					<h3 className="font-semibold text-slate-900">Vulnerabilities</h3>
+					<div className="text-xs text-gray-500">{vulnerabilities.length} found</div>
 				</div>
 				<div className="mt-4 overflow-x-auto">
 					<table className="min-w-full text-sm">
-						<thead className="text-white/70">
+						<thead className="text-gray-600">
 							<tr>
 								<th className="text-left py-2 pr-4">Severity</th>
 								<th className="text-left py-2 pr-4">Title</th>
@@ -77,10 +77,10 @@ export function DashboardPage() {
 						</thead>
 						<tbody>
 							{vulnerabilities.map(v => (
-								<tr key={v.id} className="border-t border-white/10">
+								<tr key={v.id} className="border-t border-slate-200">
 									<td className="py-2 pr-4"><span className="badge">{v.severity}</span></td>
-									<td className="py-2 pr-4">{v.title}</td>
-									<td className="py-2 pr-4 text-white/70">{v.recommendation}</td>
+									<td className="py-2 pr-4 text-slate-900">{v.title}</td>
+									<td className="py-2 pr-4 text-gray-600">{v.recommendation}</td>
 								</tr>
 							))}
 						</tbody>

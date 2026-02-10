@@ -2,9 +2,10 @@ import { PropsWithChildren } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ToastContainer } from '../ToastContainer';
 import cybersentryLogo from '../../assets/cybersentry.png';
-import '@fontsource/urbanist/400.css';
-import '@fontsource/urbanist/600.css';
-import '@fontsource/urbanist/700.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
 
 export function AdminPortalLayout({ children }: PropsWithChildren) {
 	const location = useLocation();
@@ -14,7 +15,7 @@ export function AdminPortalLayout({ children }: PropsWithChildren) {
 	};
 
 	return (
-		<div className="min-h-screen bg-[#f4f6fb] text-slate-900 font-['Urbanist']">
+		<div className="min-h-screen bg-[#f4f6fb] text-slate-900 font-sans" style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
 			<ToastContainer />
 			<div className="relative overflow-hidden">
 				<div className="pointer-events-none absolute -top-32 right-0 h-80 w-80 rounded-full bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.35),rgba(59,130,246,0)_65%)] blur-2xl" />

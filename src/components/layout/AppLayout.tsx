@@ -5,7 +5,7 @@ import { ToastContainer } from '../ToastContainer';
 
 export function AppLayout({ children }: PropsWithChildren) {
 	return (
-		<div className="min-h-screen flex flex-col">
+		<div className="min-h-screen flex flex-col bg-[#f4f6fb]">
 			<ToastContainer />
 			<Navbar />
 			<main className="flex-1">

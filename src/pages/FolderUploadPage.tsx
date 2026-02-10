@@ -949,8 +949,8 @@ export function FolderUploadPage() {
   return (
     <div className="container-max py-12 space-y-6">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Folder to PDF Converter</h1>
-        <p className="text-white/70">
+        <h1 className="text-3xl font-bold mb-2 text-slate-900">Folder to PDF Converter</h1>
+        <p className="text-gray-600">
           Upload a folder with the pen test report structure to generate a PDF
         </p>
       </div>
@@ -963,19 +963,19 @@ export function FolderUploadPage() {
           onDragOver={handleDrag}
           onDrop={handleDrop}
           className={`glass rounded-xl p-12 border-2 border-dashed transition-colors ${
-            dragActive ? 'border-brand bg-brand/10' : 'border-white/20'
+            dragActive ? 'border-brand bg-brand/10' : 'border-slate-200'
           }`}
         >
           <div className="flex flex-col items-center justify-center text-center space-y-4">
             <FolderOpen size={64} className="text-brand" />
             <div>
-              <h3 className="text-xl font-semibold mb-2">
+              <h3 className="text-xl font-semibold mb-2 text-slate-900">
                 Drop your folder here
               </h3>
-              <p className="text-white/70 mb-4">
+              <p className="text-gray-600 mb-4">
                 Or click to browse for a folder
               </p>
-              <p className="text-sm text-white/50">
+              <p className="text-sm text-gray-500">
                 Any folder structure is supported. Text files will be processed
                 for AI analysis.
               </p>
@@ -1004,11 +1004,11 @@ export function FolderUploadPage() {
         <div className="glass rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             {validation.valid ? (
-              <CheckCircle2 size={24} className="text-green-400" />
+              <CheckCircle2 size={24} className="text-green-600" />
             ) : (
-              <XCircle size={24} className="text-red-400" />
+              <XCircle size={24} className="text-red-600" />
             )}
-            <h3 className="text-lg font-semibold">
+            <h3 className="text-lg font-semibold text-slate-900">
               {validation.valid
                 ? 'Folder Structure Valid'
                 : 'Validation Failed'}
@@ -1016,8 +1016,8 @@ export function FolderUploadPage() {
           </div>
           {validation.errors.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm font-medium text-red-400 mb-2">Errors:</p>
-              <ul className="list-disc list-inside space-y-1 text-sm text-white/70">
+              <p className="text-sm font-medium text-red-600 mb-2">Errors:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
                 {validation.errors.map((error, idx) => (
                   <li key={idx}>{error}</li>
                 ))}
@@ -1026,10 +1026,10 @@ export function FolderUploadPage() {
           )}
           {validation.warnings.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-yellow-400 mb-2">
+              <p className="text-sm font-medium text-amber-600 mb-2">
                 Warnings:
               </p>
-              <ul className="list-disc list-inside space-y-1 text-sm text-white/70">
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
                 {validation.warnings.map((warning, idx) => (
                   <li key={idx}>{warning}</li>
                 ))}
@@ -1044,9 +1044,9 @@ export function FolderUploadPage() {
         <div className="glass rounded-xl p-6 flex flex-col items-center gap-3 border border-brand/30">
           <div className="flex items-center gap-3">
             <Loader2 size={24} className="animate-spin text-brand" />
-            <span className="font-medium">Reading and processing files...</span>
+            <span className="font-medium text-slate-900">Reading and processing files...</span>
           </div>
-          <p className="text-sm text-white/60 text-center">
+          <p className="text-sm text-gray-600 text-center">
             Validating folder structure and reading file contents. This may take
             a few seconds.
           </p>
@@ -1058,17 +1058,17 @@ export function FolderUploadPage() {
         <div className="glass rounded-xl p-8 flex flex-col items-center gap-4 border-2 border-brand/50 bg-brand/5">
           <div className="flex items-center gap-3">
             <Loader2 size={32} className="animate-spin text-brand" />
-            <span className="text-lg font-semibold">
+            <span className="text-lg font-semibold text-slate-900">
               AI Processing Your Data
             </span>
           </div>
-          <p className="text-sm text-white/70 text-center max-w-lg">
+          <p className="text-sm text-gray-700 text-center max-w-lg">
             Processing and optimizing your files for AI analysis. Large files
             are being intelligently sampled to preserve important findings while
             staying within processing limits. AI is analyzing your data and
             generating a comprehensive professional report...
           </p>
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-gray-500">
             This may take 2-5 minutes for large datasets. Please wait...
           </p>
         </div>
@@ -1092,7 +1092,7 @@ export function FolderUploadPage() {
           return (
             <div className="glass rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-lg font-semibold text-slate-900">
                   Uploaded Files ({validFiles.length})
                 </h3>
                 <button
@@ -1106,7 +1106,7 @@ export function FolderUploadPage() {
                 {validFiles.slice(0, 20).map((file, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-2 text-sm text-white/70"
+                    className="flex items-center gap-2 text-sm text-gray-700"
                   >
                     <FileText size={16} />
                     <span className="truncate">
@@ -1115,7 +1115,7 @@ export function FolderUploadPage() {
                   </div>
                 ))}
                 {validFiles.length > 20 && (
-                  <p className="text-sm text-white/50">
+                  <p className="text-sm text-gray-500">
                     ... and {validFiles.length - 20} more files
                   </p>
                 )}
@@ -1126,15 +1126,15 @@ export function FolderUploadPage() {
 
       {/* Files Processed Successfully - Ready for PDF Generation */}
       {filesReady && !reportData && validation?.valid && !processing && (
-        <div className="glass rounded-xl p-8 border-2 border-green-400/30 bg-green-400/5">
+        <div className="glass rounded-xl p-8 border-2 border-green-200 bg-green-50/50">
           <div className="flex flex-col items-center gap-6">
             <div className="flex items-center gap-3">
-              <CheckCircle2 size={48} className="text-green-400" />
+              <CheckCircle2 size={48} className="text-green-600" />
               <div className="text-center">
-                <h3 className="text-xl font-semibold mb-2 text-green-400">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">
                   Files Successfully Processed!
                 </h3>
-                <p className="text-sm text-white/80">
+                <p className="text-sm text-gray-700">
                   {folderData?.files.length || 0} files read and ready for PDF
                   generation
                 </p>
@@ -1144,24 +1144,24 @@ export function FolderUploadPage() {
             {/* Processed Files Summary */}
             {folderData && folderData.files.length > 0 && (
               <div className="w-full max-w-2xl space-y-4">
-                <p className="text-sm font-medium text-white/90 mb-2">
+                <p className="text-sm font-medium text-slate-800 mb-2">
                   Processed Files Preview:
                 </p>
-                <div className="bg-black/20 rounded-lg p-4 max-h-48 overflow-y-auto space-y-1">
+                <div className="bg-slate-100 rounded-lg p-4 max-h-48 overflow-y-auto space-y-1">
                   {folderData.files.slice(0, 10).map((file, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 text-xs text-white/70"
+                      className="flex items-center gap-2 text-xs text-gray-700"
                     >
                       <FileText size={14} className="text-brand" />
                       <span className="truncate">{file.path}</span>
-                      <span className="text-white/40">
+                      <span className="text-gray-500">
                         ({file.content.length} chars)
                       </span>
                     </div>
                   ))}
                   {folderData.files.length > 10 && (
-                    <p className="text-xs text-white/50 pt-2">
+                    <p className="text-xs text-gray-500 pt-2">
                       ... and {folderData.files.length - 10} more files
                     </p>
                   )}
@@ -1173,24 +1173,24 @@ export function FolderUploadPage() {
                   className="w-full flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/20 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Bug size={16} className="text-yellow-400" />
-                    <span className="text-sm font-medium text-yellow-400">
+                    <Bug size={16} className="text-amber-600" />
+                    <span className="text-sm font-medium text-amber-600">
                       {showDebug ? 'Hide' : 'Show'} Debug Information
                     </span>
                   </div>
                   {showDebug ? (
-                    <ChevronUp size={16} className="text-yellow-400" />
+                    <ChevronUp size={16} className="text-amber-600" />
                   ) : (
-                    <ChevronDown size={16} className="text-yellow-400" />
+                    <ChevronDown size={16} className="text-amber-600" />
                   )}
                 </button>
               </div>
             )}
 
-            <div className="w-full max-w-md border-t border-white/10 pt-6 space-y-4">
+            <div className="w-full max-w-md border-t border-slate-200 pt-6 space-y-4">
               {/* Pen Test Type Selection */}
               <div className="w-full">
-                <p className="text-sm font-medium text-white/90 mb-3">
+                <p className="text-sm font-medium text-slate-800 mb-3">
                   Select Penetration Test Type:
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -1199,7 +1199,7 @@ export function FolderUploadPage() {
                     className={`p-4 rounded-lg border-2 transition-all ${
                       pentestType === 'soft'
                         ? 'border-brand bg-brand/20'
-                        : 'border-white/20 bg-white/5 hover:bg-white/10'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -1207,12 +1207,12 @@ export function FolderUploadPage() {
                         className={`text-sm font-medium ${
                           pentestType === 'soft'
                             ? 'text-brand'
-                            : 'text-white/70'
+                            : 'text-gray-700'
                         }`}
                       >
                         Soft Pen Test
                       </span>
-                      <span className="text-xs text-white/50 text-center">
+                      <span className="text-xs text-gray-500 text-center">
                         Non-intrusive assessment
                       </span>
                     </div>
@@ -1222,7 +1222,7 @@ export function FolderUploadPage() {
                     className={`p-4 rounded-lg border-2 transition-all ${
                       pentestType === 'aggressive'
                         ? 'border-brand bg-brand/20'
-                        : 'border-white/20 bg-white/5 hover:bg-white/10'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -1230,12 +1230,12 @@ export function FolderUploadPage() {
                         className={`text-sm font-medium ${
                           pentestType === 'aggressive'
                             ? 'text-brand'
-                            : 'text-white/70'
+                            : 'text-gray-700'
                         }`}
                       >
                         Aggressive Pen Test
                       </span>
-                      <span className="text-xs text-white/50 text-center">
+                      <span className="text-xs text-gray-500 text-center">
                         Intensive exploitation
                       </span>
                     </div>
@@ -1245,7 +1245,7 @@ export function FolderUploadPage() {
 
               {/* Logo Selection */}
               <div className="w-full">
-                <p className="text-sm font-medium text-white/90 mb-3">
+                <p className="text-sm font-medium text-slate-800 mb-3">
                   Select Logo for PDF:
                 </p>
                 <div className="grid grid-cols-3 gap-3">
@@ -1254,14 +1254,14 @@ export function FolderUploadPage() {
                     className={`p-3 rounded-lg border-2 transition-all ${
                       selectedLogo === 'cybersentry'
                         ? 'border-brand bg-brand/20'
-                        : 'border-white/20 bg-white/5 hover:bg-white/10'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <span
                       className={`text-sm font-medium ${
                         selectedLogo === 'cybersentry'
                           ? 'text-brand'
-                          : 'text-white/70'
+                          : 'text-gray-700'
                       }`}
                     >
                       CyberSentry
@@ -1272,14 +1272,14 @@ export function FolderUploadPage() {
                     className={`p-3 rounded-lg border-2 transition-all ${
                       selectedLogo === 'onecom'
                         ? 'border-brand bg-brand/20'
-                        : 'border-white/20 bg-white/5 hover:bg-white/10'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <span
                       className={`text-sm font-medium ${
                         selectedLogo === 'onecom'
                           ? 'text-brand'
-                          : 'text-white/70'
+                          : 'text-gray-700'
                       }`}
                     >
                       Onecom
@@ -1290,14 +1290,14 @@ export function FolderUploadPage() {
                     className={`p-3 rounded-lg border-2 transition-all ${
                       selectedLogo === 'cybersentry-x-hosted'
                         ? 'border-brand bg-brand/20'
-                        : 'border-white/20 bg-white/5 hover:bg-white/10'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <span
                       className={`text-xs font-medium ${
                         selectedLogo === 'cybersentry-x-hosted'
                           ? 'text-brand'
-                          : 'text-white/70'
+                          : 'text-gray-700'
                       }`}
                     >
                       CyberSentry X HOSTED
@@ -1307,10 +1307,10 @@ export function FolderUploadPage() {
               </div>
 
               <div className="text-center">
-                <p className="text-sm text-white/70 mb-1">
+                <p className="text-sm text-gray-700 mb-1">
                   Ready to generate a professional AI-powered PDF report
                 </p>
-                <p className="text-xs text-white/50">
+                <p className="text-xs text-gray-500">
                   Click the button below to send data to AI for analysis and PDF
                   generation
                 </p>
@@ -1339,11 +1339,11 @@ export function FolderUploadPage() {
 
       {/* Debug Panel */}
       {showDebug && debugInfo.length > 0 && (
-        <div className="glass rounded-xl p-6 border-2 border-yellow-400/30 bg-yellow-500/5">
+        <div className="glass rounded-xl p-6 border-2 border-amber-200 bg-amber-50/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Bug size={20} className="text-yellow-400" />
-              <h3 className="text-lg font-semibold text-yellow-400">
+              <Bug size={20} className="text-amber-600" />
+              <h3 className="text-lg font-semibold text-amber-600">
                 Debug Information
               </h3>
             </div>
@@ -1366,7 +1366,7 @@ export function FolderUploadPage() {
               )}
               <button
                 onClick={() => setShowDebug(false)}
-                className="text-white/60 hover:text-white"
+                className="text-gray-600 hover:text-slate-900"
               >
                 <XCircle size={20} />
               </button>
@@ -1374,7 +1374,7 @@ export function FolderUploadPage() {
           </div>
 
           <div className="space-y-4 max-h-[600px] overflow-y-auto">
-            <div className="text-sm text-white/70 mb-4">
+            <div className="text-sm text-gray-700 mb-4">
               <p>
                 <strong>Total Files Processed:</strong> {debugInfo.length}
               </p>
@@ -1386,7 +1386,7 @@ export function FolderUploadPage() {
                 <strong>Failed to Read:</strong>{' '}
                 {debugInfo.filter((f) => !f.readSuccess).length}
               </p>
-              <p className="mt-2 text-yellow-400">
+              <p className="mt-2 text-amber-600">
                 💡 Check browser console (F12) for detailed logs
               </p>
             </div>
@@ -1404,44 +1404,44 @@ export function FolderUploadPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       {file.readSuccess ? (
-                        <CheckCircle2 size={16} className="text-green-400" />
+                        <CheckCircle2 size={16} className="text-green-600" />
                       ) : (
-                        <XCircle size={16} className="text-red-400" />
+                        <XCircle size={16} className="text-red-600" />
                       )}
-                      <span className="font-medium text-white">
+                      <span className="font-medium text-slate-900">
                         {file.fileName}
                       </span>
                     </div>
-                    <p className="text-xs text-white/60 mb-2">{file.path}</p>
+                    <p className="text-xs text-gray-600 mb-2">{file.path}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
                   <div>
-                    <span className="text-white/50">Size:</span>
-                    <span className="ml-1 text-white/80">
+                    <span className="text-gray-500">Size:</span>
+                    <span className="ml-1 text-gray-700">
                       {file.size} bytes
                     </span>
                   </div>
                   <div>
-                    <span className="text-white/50">Type:</span>
-                    <span className="ml-1 text-white/80">{file.type}</span>
+                    <span className="text-gray-500">Type:</span>
+                    <span className="ml-1 text-gray-700">{file.type}</span>
                   </div>
                   <div>
-                    <span className="text-white/50">Content Length:</span>
+                    <span className="text-gray-500">Content Length:</span>
                     <span
                       className={`ml-1 ${
-                        file.readSuccess ? 'text-white/80' : 'text-red-400'
+                        file.readSuccess ? 'text-gray-700' : 'text-red-600'
                       }`}
                     >
                       {file.contentLength} chars
                     </span>
                   </div>
                   <div>
-                    <span className="text-white/50">Status:</span>
+                    <span className="text-gray-500">Status:</span>
                     <span
                       className={`ml-1 ${
-                        file.readSuccess ? 'text-green-400' : 'text-red-400'
+                        file.readSuccess ? 'text-green-600' : 'text-red-600'
                       }`}
                     >
                       {file.readSuccess ? '✓ Read' : '✗ Failed'}
@@ -1450,7 +1450,7 @@ export function FolderUploadPage() {
                 </div>
 
                 {file.readError && (
-                  <div className="mb-2 p-2 bg-red-500/20 rounded text-xs text-red-400">
+                  <div className="mb-2 p-2 bg-red-500/20 rounded text-xs text-red-600">
                     <strong>Error:</strong> {file.readError}
                   </div>
                 )}
@@ -1486,7 +1486,7 @@ export function FolderUploadPage() {
                     {expandedFiles.has(idx) && (
                       <div className="mt-2">
                         <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-white/50">
+                          <p className="text-xs text-gray-500">
                             Full Content ({file.contentLength} characters)
                           </p>
                           <button
@@ -1508,20 +1508,20 @@ export function FolderUploadPage() {
                               : 'Copy to Clipboard'}
                           </button>
                         </div>
-                        <pre className="text-xs bg-black/40 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto text-white/90 font-mono border border-white/10 whitespace-pre-wrap break-words">
+                        <pre className="text-xs bg-slate-100 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto text-slate-800 font-mono border border-slate-200 whitespace-pre-wrap break-words">
                           {file.fullContent}
                         </pre>
                       </div>
                     )}
                     {!expandedFiles.has(idx) && (
                       <div className="mt-2">
-                        <p className="text-xs text-white/50 mb-1">
+                        <p className="text-xs text-gray-500 mb-1">
                           Content Preview (first 300 chars):
                         </p>
-                        <pre className="text-xs bg-black/30 p-2 rounded overflow-x-auto text-white/80 font-mono border border-white/10">
+                        <pre className="text-xs bg-slate-100 p-2 rounded overflow-x-auto text-gray-700 font-mono border border-slate-200">
                           {file.fullContent.substring(0, 300)}
                           {file.fullContent.length > 300 && (
-                            <span className="text-white/50">
+                            <span className="text-gray-500">
                               {' '}
                               ... (click "Show Full Content" to see all{' '}
                               {file.contentLength} characters)
@@ -1536,14 +1536,14 @@ export function FolderUploadPage() {
                 {file.readSuccess &&
                   file.contentLength !== file.size &&
                   file.size > 0 && (
-                    <p className="text-xs text-yellow-400 mt-2">
+                    <p className="text-xs text-amber-600 mt-2">
                       ⚠ Warning: Content length ({file.contentLength}) doesn't
                       match file size ({file.size})
                     </p>
                   )}
 
                 {file.readSuccess && file.contentLength === 0 && (
-                  <p className="text-xs text-yellow-400 mt-2">
+                  <p className="text-xs text-amber-600 mt-2">
                     ⚠ Warning: File appears to be empty
                   </p>
                 )}
@@ -1555,14 +1555,14 @@ export function FolderUploadPage() {
 
       {/* AI Error Message */}
       {aiError && (
-        <div className="glass rounded-xl p-6 border border-yellow-400/30">
+        <div className="glass rounded-xl p-6 border border-amber-200">
           <div className="flex items-center gap-3">
-            <XCircle size={20} className="text-yellow-400" />
+            <XCircle size={20} className="text-amber-600" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-400">
+              <p className="text-sm font-medium text-amber-600">
                 AI Processing Warning
               </p>
-              <p className="text-xs text-white/60 mt-1">{aiError}</p>
+              <p className="text-xs text-gray-600 mt-1">{aiError}</p>
             </div>
           </div>
         </div>
@@ -1570,15 +1570,15 @@ export function FolderUploadPage() {
 
       {/* PDF Ready for Download */}
       {reportData && validation?.valid && !processing && !aiProcessing && (
-        <div className="glass rounded-xl p-8 border-2 border-green-400/30 bg-green-400/5">
+        <div className="glass rounded-xl p-8 border-2 border-green-200 bg-green-50/50">
           <div className="flex flex-col items-center gap-6">
             <div className="flex items-center gap-3">
-              <CheckCircle2 size={48} className="text-green-400" />
+              <CheckCircle2 size={48} className="text-green-600" />
               <div className="text-center">
-                <h3 className="text-xl font-semibold mb-2 text-green-400">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">
                   PDF Generated Successfully!
                 </h3>
-                <p className="text-sm text-white/80">
+                <p className="text-sm text-gray-700">
                   AI has analyzed your data and created a beautiful,
                   professional {reportData.sections.length}-section penetration
                   test report
@@ -1589,19 +1589,19 @@ export function FolderUploadPage() {
             {/* Report Sections Preview */}
             {reportData.sections.length > 0 && (
               <div className="w-full max-w-2xl">
-                <p className="text-sm font-medium text-white/90 mb-3">
+                <p className="text-sm font-medium text-slate-800 mb-3">
                   Report Sections:
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {reportData.sections.map((section, idx) => (
                     <div
                       key={idx}
-                      className="bg-black/20 rounded-lg p-3 border border-white/10"
+                      className="bg-slate-100 rounded-lg p-3 border border-slate-200"
                     >
                       <p className="text-xs font-medium text-brand mb-1">
                         {section.title}
                       </p>
-                      <p className="text-xs text-white/60 line-clamp-2">
+                      <p className="text-xs text-gray-600 line-clamp-2">
                         {section.content.substring(0, 100)}...
                       </p>
                     </div>
@@ -1610,7 +1610,7 @@ export function FolderUploadPage() {
               </div>
             )}
 
-            <div className="w-full max-w-md border-t border-white/10 pt-6">
+            <div className="w-full max-w-md border-t border-slate-200 pt-6">
               <PDFDownloadLink
                 document={
                   <ReportPdf
