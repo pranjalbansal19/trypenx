@@ -6,340 +6,268 @@ import type {
   TestConfiguration,
   TestRun,
   Report,
-  SeveritySummary,
 } from '../types/admin'
 
-// Simulate API latency
-function delay(ms = 300): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, options)
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`
+    try {
+      const data = (await response.json()) as { error?: string }
+      if (data?.error) message = data.error
+    } catch {
+      // ignore JSON parsing errors for non-JSON responses
+    }
+    throw new Error(message)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return (await response.json()) as T
+  }
+
+  return (await response.text()) as unknown as T
 }
 
-// In-memory storage for demo (replace with real API calls)
-let customersStore: Customer[] = []
-let scopesStore: Scope[] = []
-let testConfigsStore: TestConfiguration[] = []
-let testRunsStore: TestRun[] = []
-let reportsStore: Report[] = []
-let consentStore: CustomerConsent[] = []
-let notesStore: CustomerNote[] = []
-
-// Generate IDs
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+function jsonBody(body: unknown): RequestInit {
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }
 }
 
 // Customers API
 export async function getCustomers(): Promise<Customer[]> {
-  await delay()
-  return [...customersStore]
+  return apiFetch<Customer[]>(`${API_BASE}/customers`)
 }
 
 export async function getCustomerById(id: string): Promise<Customer | null> {
-  await delay()
-  return customersStore.find((c) => c.id === id) || null
+  try {
+    return await apiFetch<Customer>(`${API_BASE}/customers/${id}`)
+  } catch (error) {
+    if ((error as Error).message.toLowerCase().includes('not found')) {
+      return null
+    }
+    throw error
+  }
 }
 
 export async function createCustomer(
   data: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Customer> {
-  await delay()
-  const customer: Customer = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  customersStore.push(customer)
-  return customer
+  return apiFetch<Customer>(`${API_BASE}/customers`, {
+    method: 'POST',
+    ...jsonBody(data),
+  })
 }
 
 export async function updateCustomer(
   id: string,
   data: Partial<Customer>
 ): Promise<Customer> {
-  await delay()
-  const index = customersStore.findIndex((c) => c.id === id)
-  if (index === -1) throw new Error('Customer not found')
-  const updated = {
-    ...customersStore[index],
-    ...data,
-    updatedAt: new Date().toISOString(),
-  } as Customer
-  customersStore[index] = updated
-  return updated
+  return apiFetch<Customer>(`${API_BASE}/customers/${id}`, {
+    method: 'PUT',
+    ...jsonBody(data),
+  })
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  await delay()
-  customersStore = customersStore.filter((c) => c.id !== id)
-  scopesStore = scopesStore.filter((s) => s.customerId !== id)
-  testConfigsStore = testConfigsStore.filter((tc) => tc.customerId !== id)
-  consentStore = consentStore.filter((c) => c.customerId !== id)
-  notesStore = notesStore.filter((n) => n.customerId !== id)
+  await apiFetch<void>(`${API_BASE}/customers/${id}`, { method: 'DELETE' })
 }
 
-// Customer notes (timestamped list, like a to-do list)
+// Customer notes
 export async function getNotesByCustomerId(
   customerId: string
 ): Promise<CustomerNote[]> {
-  await delay()
-  return notesStore
-    .filter((n) => n.customerId === customerId)
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+  return apiFetch<CustomerNote[]>(
+    `${API_BASE}/customers/${customerId}/notes`
+  )
 }
 
 export async function createNote(
   data: Omit<CustomerNote, 'id' | 'createdAt'>
 ): Promise<CustomerNote> {
-  await delay()
-  const now = new Date().toISOString()
-  const note: CustomerNote = {
-    ...data,
-    id: generateId(),
-    createdAt: now,
-  }
-  notesStore.push(note)
-  return note
+  return apiFetch<CustomerNote>(
+    `${API_BASE}/customers/${data.customerId}/notes`,
+    {
+      method: 'POST',
+      ...jsonBody({ content: data.content }),
+    }
+  )
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  await delay()
-  notesStore = notesStore.filter((n) => n.id !== id)
+  await apiFetch<void>(`${API_BASE}/notes/${id}`, { method: 'DELETE' })
 }
 
 // Scopes API
 export async function getScopesByCustomerId(
   customerId: string
 ): Promise<Scope[]> {
-  await delay()
-  return scopesStore.filter((s) => s.customerId === customerId)
+  return apiFetch<Scope[]>(`${API_BASE}/customers/${customerId}/scopes`)
 }
 
 export async function createScope(
   data: Omit<Scope, 'id' | 'createdAt'>
 ): Promise<Scope> {
-  await delay()
-  const scope: Scope = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-  }
-  scopesStore.push(scope)
-  return scope
+  return apiFetch<Scope>(`${API_BASE}/scopes`, {
+    method: 'POST',
+    ...jsonBody(data),
+  })
 }
 
 export async function updateScope(
   id: string,
   data: Partial<Scope>
 ): Promise<Scope> {
-  await delay()
-  const index = scopesStore.findIndex((s) => s.id === id)
-  if (index === -1) throw new Error('Scope not found')
-  const updated = {
-    ...scopesStore[index],
-    ...data,
-  } as Scope
-  scopesStore[index] = updated
-  return updated
+  return apiFetch<Scope>(`${API_BASE}/scopes/${id}`, {
+    method: 'PUT',
+    ...jsonBody(data),
+  })
 }
 
 export async function deleteScope(id: string): Promise<void> {
-  await delay()
-  scopesStore = scopesStore.filter((s) => s.id !== id)
+  await apiFetch<void>(`${API_BASE}/scopes/${id}`, { method: 'DELETE' })
 }
 
 // Test Configurations API
 export async function getTestConfigByCustomerId(
   customerId: string
 ): Promise<TestConfiguration | null> {
-  await delay()
-  return testConfigsStore.find((tc) => tc.customerId === customerId) || null
+  return apiFetch<TestConfiguration | null>(
+    `${API_BASE}/customers/${customerId}/test-config`
+  )
 }
 
 export async function createTestConfig(
   data: Omit<TestConfiguration, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<TestConfiguration> {
-  await delay()
-  const config: TestConfiguration = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  // Remove existing config for this customer if any
-  testConfigsStore = testConfigsStore.filter(
-    (tc) => tc.customerId !== data.customerId
+  return apiFetch<TestConfiguration>(
+    `${API_BASE}/customers/${data.customerId}/test-config`,
+    {
+      method: 'POST',
+      ...jsonBody(data),
+    }
   )
-  testConfigsStore.push(config)
-  return config
 }
 
 export async function updateTestConfig(
   id: string,
   data: Partial<TestConfiguration>
 ): Promise<TestConfiguration> {
-  await delay()
-  const index = testConfigsStore.findIndex((tc) => tc.id === id)
-  if (index === -1) throw new Error('Test configuration not found')
-  const updated = {
-    ...testConfigsStore[index],
-    ...data,
-    updatedAt: new Date().toISOString(),
-  } as TestConfiguration
-  testConfigsStore[index] = updated
-  return updated
+  return apiFetch<TestConfiguration>(`${API_BASE}/test-config/${id}`, {
+    method: 'PUT',
+    ...jsonBody(data),
+  })
 }
 
 // Test Runs API
 export async function getTestRunsByCustomerId(
   customerId: string
 ): Promise<TestRun[]> {
-  await delay()
-  return testRunsStore
-    .filter((tr) => tr.customerId === customerId)
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+  return apiFetch<TestRun[]>(`${API_BASE}/customers/${customerId}/test-runs`)
 }
 
 export async function getAllTestRuns(): Promise<TestRun[]> {
-  await delay()
-  return [...testRunsStore].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  return apiFetch<TestRun[]>(`${API_BASE}/test-runs`)
 }
 
 export async function createTestRun(
   data: Omit<TestRun, 'id' | 'createdAt'>
 ): Promise<TestRun> {
-  await delay()
-  const testRun: TestRun = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-  }
-  testRunsStore.push(testRun)
-  return testRun
+  return apiFetch<TestRun>(`${API_BASE}/test-runs`, {
+    method: 'POST',
+    ...jsonBody(data),
+  })
 }
 
 export async function updateTestRun(
   id: string,
   data: Partial<TestRun>
 ): Promise<TestRun> {
-  await delay()
-  const index = testRunsStore.findIndex((tr) => tr.id === id)
-  if (index === -1) throw new Error('Test run not found')
-  const updated = {
-    ...testRunsStore[index],
-    ...data,
-  } as TestRun
-  testRunsStore[index] = updated
-  return updated
+  return apiFetch<TestRun>(`${API_BASE}/test-runs/${id}`, {
+    method: 'PUT',
+    ...jsonBody(data),
+  })
 }
 
 // Reports API
 export async function getReportsByCustomerId(
   customerId: string
 ): Promise<Report[]> {
-  await delay()
-  return reportsStore
-    .filter((r) => r.customerId === customerId)
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+  return apiFetch<Report[]>(`${API_BASE}/customers/${customerId}/reports`)
 }
 
 export async function getAllReports(): Promise<Report[]> {
-  await delay()
-  return [...reportsStore].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  return apiFetch<Report[]>(`${API_BASE}/reports`)
 }
 
 export async function getReportById(id: string): Promise<Report | null> {
-  await delay()
-  return reportsStore.find((r) => r.id === id) || null
+  try {
+    return await apiFetch<Report>(`${API_BASE}/reports/${id}`)
+  } catch (error) {
+    if ((error as Error).message.toLowerCase().includes('not found')) {
+      return null
+    }
+    throw error
+  }
 }
 
 export async function createReport(
   data: Omit<Report, 'id' | 'createdAt'>
 ): Promise<Report> {
-  await delay()
-  const report: Report = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-  }
-  reportsStore.push(report)
-  return report
+  return apiFetch<Report>(`${API_BASE}/reports`, {
+    method: 'POST',
+    ...jsonBody(data),
+  })
 }
 
 export async function updateReport(
   id: string,
   data: Partial<Report>
 ): Promise<Report> {
-  await delay()
-  const index = reportsStore.findIndex((r) => r.id === id)
-  if (index === -1) throw new Error('Report not found')
-  const updated = {
-    ...reportsStore[index],
-    ...data,
-  } as Report
-  reportsStore[index] = updated
-  return updated
+  return apiFetch<Report>(`${API_BASE}/reports/${id}`, {
+    method: 'PUT',
+    ...jsonBody(data),
+  })
 }
 
-// Customer consents (signed VAA / pen test agreement documents)
+// Customer consents
 export async function getConsentsByCustomerId(
   customerId: string
 ): Promise<CustomerConsent[]> {
-  await delay()
-  return consentStore
-    .filter((c) => c.customerId === customerId)
-    .sort(
-      (a, b) =>
-        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    )
+  return apiFetch<CustomerConsent[]>(
+    `${API_BASE}/customers/${customerId}/consents`
+  )
 }
 
 export async function uploadConsent(
   customerId: string,
   file: File,
-  agreedAt?: string // optional "signed at" date; defaults to now
+  agreedAt?: string
 ): Promise<CustomerConsent> {
-  await delay()
-  const now = new Date().toISOString()
-  const agreedDate = agreedAt || now
-  const fileData = await fileToDataUrl(file)
-  const consent: CustomerConsent = {
-    id: generateId(),
-    customerId,
-    fileName: file.name,
-    agreedAt: agreedDate,
-    uploadedAt: now,
-    fileData,
+  const formData = new FormData()
+  formData.append('file', file)
+  if (agreedAt) {
+    formData.append('agreedAt', agreedAt)
   }
-  consentStore.push(consent)
-  return consent
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
+  return apiFetch<CustomerConsent>(
+    `${API_BASE}/customers/${customerId}/consents`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  )
 }
 
 export async function deleteConsent(id: string): Promise<void> {
-  await delay()
-  consentStore = consentStore.filter((c) => c.id !== id)
+  await apiFetch<void>(`${API_BASE}/consents/${id}`, { method: 'DELETE' })
 }
 
 // Helper: Get last and next run for a customer
@@ -347,8 +275,7 @@ export async function getCustomerRunInfo(customerId: string): Promise<{
   lastRun: TestRun | null
   nextScheduledRun: TestRun | null
 }> {
-  await delay()
-  const runs = testRunsStore.filter((tr) => tr.customerId === customerId)
+  const runs = await getTestRunsByCustomerId(customerId)
   const completedRuns = runs
     .filter((r) => r.status === 'Completed')
     .sort(

@@ -36,8 +36,10 @@ export interface CustomerConsent {
   agreedAt: string // ISO date
   /** When the file was uploaded to the portal */
   uploadedAt: string // ISO date
-  /** Stored file: base64 data URL for in-memory demo; in production would be a URL to blob storage */
-  fileData: string
+  /** Download URL for the stored file */
+  downloadUrl: string
+  fileSize?: number
+  fileMimeType?: string
 }
 
 export interface Scope {
