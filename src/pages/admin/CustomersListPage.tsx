@@ -1,14 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../state/adminStore';
 import type { Customer, ContractType, CustomerStatus } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
+import {
+	Search,
+	Plus,
+	ChevronRight,
+	PauseCircle,
+	PlayCircle,
+	Trash2,
+	PencilLine,
+} from 'lucide-react';
 
 export function CustomersListPage() {
 	const navigate = useNavigate();
 	const { customers, loadCustomers, createCustomer, updateCustomer, deleteCustomer, loading } = useAdminStore();
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+	const [searchTerm, setSearchTerm] = useState('');
+	const [statusFilter, setStatusFilter] = useState<'all' | CustomerStatus>('all');
+	const [contractFilter, setContractFilter] = useState<'all' | ContractType>('all');
 	
 	const [formData, setFormData] = useState({
 		companyName: '',
@@ -80,6 +92,16 @@ export function CustomersListPage() {
 		}
 	};
 
+	const handleDelete = async (customerId: string, companyName: string) => {
+		if (!confirm(`Delete ${companyName}? This cannot be undone.`)) return;
+		try {
+			await deleteCustomer(customerId);
+			loadCustomers();
+		} catch (error) {
+			console.error('Failed to delete customer:', error);
+		}
+	};
+
 	const [runInfoCache, setRunInfoCache] = useState<Record<string, { lastRun: string | null; nextRun: string | null }>>({});
 
 	useEffect(() => {
@@ -104,14 +126,52 @@ export function CustomersListPage() {
 		});
 	}, [customers]);
 
+	const stats = useMemo(() => {
+		const total = customers.length;
+		const active = customers.filter((c) => c.status === 'Active').length;
+		const paused = customers.filter((c) => c.status === 'Paused').length;
+		const cancelled = customers.filter((c) => c.status === 'Cancelled').length;
+		return { total, active, paused, cancelled };
+	}, [customers]);
+
+	const filteredCustomers = useMemo(() => {
+		return customers.filter((customer) => {
+			const searchValue = searchTerm.toLowerCase().trim();
+			const matchesSearch =
+				searchValue.length === 0 ||
+				customer.companyName.toLowerCase().includes(searchValue) ||
+				customer.contractType.toLowerCase().includes(searchValue) ||
+				customer.status.toLowerCase().includes(searchValue) ||
+				customer.id.toLowerCase().includes(searchValue);
+			const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
+			const matchesContract = contractFilter === 'all' || customer.contractType === contractFilter;
+			return matchesSearch && matchesStatus && matchesContract;
+		});
+	}, [customers, searchTerm, statusFilter, contractFilter]);
+
 	if (loading && customers.length === 0) {
-		return <div className="p-8 text-gray-900">Loading customers...</div>;
+		return (
+			<div className="px-8 py-16">
+				<div className="rounded-3xl border border-slate-200 bg-white/80 p-10 text-slate-600 shadow-sm">
+					Loading customer intelligence...
+				</div>
+			</div>
+		);
 	}
 
 	return (
-		<div className="p-8">
-			<div className="flex justify-between items-center mb-6">
-				<h1 className="text-2xl font-bold text-gray-900">Customers</h1>
+		<div className="relative px-8 py-10 page-fade">
+			<div className="pointer-events-none absolute -right-24 top-10 h-44 w-44 rounded-full bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.35),rgba(56,189,248,0)_70%)] blur-3xl" />
+			<div className="pointer-events-none absolute bottom-6 left-4 h-36 w-36 rounded-full bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),rgba(244,114,182,0)_70%)] blur-3xl" />
+
+			<div className="relative mb-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<div className="text-xs uppercase tracking-[0.3em] text-slate-500">Customer vault</div>
+					<h1 className="mt-3 text-3xl font-semibold text-slate-900">Customer Intelligence</h1>
+					<p className="mt-2 text-base text-slate-600">
+						Manage contracts, schedules, and consent evidence with a real-time operational view.
+					</p>
+				</div>
 				<button
 					onClick={() => {
 						setEditingCustomer(null);
@@ -124,123 +184,217 @@ export function CustomersListPage() {
 						});
 						setShowAddModal(true);
 					}}
-					className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+					className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-slate-900/40"
 				>
-					Add Customer
+					<Plus className="h-4 w-4" />
+					New Customer
 				</button>
 			</div>
 
-			{/* Customers Table */}
-			<div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
-				<table className="w-full text-sm">
-					<thead className="bg-gray-100">
-						<tr>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Company Name</th>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Contract</th>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Last Run</th>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Next Scheduled</th>
-							<th className="px-4 py-3 text-left font-semibold text-gray-700">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{customers.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-									No customers yet. Add one to get started.
-								</td>
-							</tr>
-						) : (
-							customers.map((customer) => (
-								<tr key={customer.id} className="border-t border-gray-200 hover:bg-gray-50">
-									<td className="px-4 py-3 font-medium text-gray-900">{customer.companyName}</td>
-									<td className="px-4 py-3 text-gray-700">{customer.contractType}</td>
-									<td className="px-4 py-3">
-										<span
-											className={`px-2 py-1 rounded text-xs ${
-												customer.status === 'Active'
-													? 'bg-green-100 text-green-800'
-													: customer.status === 'Paused'
-													? 'bg-yellow-100 text-yellow-800'
-													: 'bg-red-100 text-red-800'
-											}`}
+			<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+				{[
+					{ label: 'Total customers', value: stats.total, accent: 'from-slate-900 via-slate-700 to-slate-500' },
+					{ label: 'Active contracts', value: stats.active, accent: 'from-emerald-500 via-teal-400 to-cyan-300' },
+					{ label: 'Paused engagements', value: stats.paused, accent: 'from-amber-400 via-orange-400 to-rose-300' },
+					{ label: 'Cancelled', value: stats.cancelled, accent: 'from-fuchsia-500 via-rose-500 to-orange-400' },
+				].map((stat, index) => (
+					<div
+						key={stat.label}
+						className="card-rise rounded-2xl border border-white/80 bg-white/90 p-5 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.45)]"
+						style={{ animationDelay: `${0.08 * index}s` }}
+					>
+						<div className="text-sm text-slate-500">{stat.label}</div>
+						<div className="mt-4 flex items-end justify-between">
+							<div className="text-3xl font-semibold text-slate-900">{stat.value}</div>
+							<div className={`h-11 w-11 rounded-2xl bg-gradient-to-br ${stat.accent} shadow-inner`} />
+						</div>
+					</div>
+				))}
+			</div>
+
+			<div className="mt-8 rounded-3xl border border-white/80 bg-white/95 shadow-[0_25px_60px_-45px_rgba(15,23,42,0.5)]">
+				<div className="flex flex-col gap-4 border-b border-slate-200/70 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+					<div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-2.5">
+						<Search className="h-4 w-4 text-slate-500" />
+						<input
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+							placeholder="Search customers, contract tiers, or status"
+							className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+						/>
+					</div>
+					<div className="flex flex-wrap items-center gap-3">
+						<select
+							value={statusFilter}
+							onChange={(e) => setStatusFilter(e.target.value as 'all' | CustomerStatus)}
+							className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+						>
+							<option value="all">All statuses</option>
+							<option value="Active">Active</option>
+							<option value="Paused">Paused</option>
+							<option value="Cancelled">Cancelled</option>
+						</select>
+						<select
+							value={contractFilter}
+							onChange={(e) => setContractFilter(e.target.value as 'all' | ContractType)}
+							className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+						>
+							<option value="all">All contracts</option>
+							<option value="Foundation">Foundation</option>
+							<option value="Pro">Pro</option>
+							<option value="Enterprise">Enterprise</option>
+						</select>
+						<div className="rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm">
+							{filteredCustomers.length} results
+						</div>
+					</div>
+				</div>
+
+				<div className="px-6 py-4">
+					<div className="hidden grid-cols-[2.2fr_1fr_1fr_1fr_1fr_1.2fr] gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 lg:grid">
+						<div>Company</div>
+						<div>Contract</div>
+						<div>Status</div>
+						<div>Last Run</div>
+						<div>Next Run</div>
+						<div>Actions</div>
+					</div>
+				</div>
+				<div className="divide-y divide-slate-200/70">
+					{filteredCustomers.length === 0 ? (
+						<div className="px-6 py-16 text-center">
+							<div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+								<Search className="h-6 w-6" />
+							</div>
+							<h3 className="mt-4 text-lg font-semibold text-slate-900">No customers match this view</h3>
+							<p className="mt-2 text-sm text-slate-500">
+								Try adjusting filters or create a new customer profile.
+							</p>
+						</div>
+					) : (
+						filteredCustomers.map((customer) => (
+							<div
+								key={customer.id}
+								className="grid gap-4 px-6 py-5 transition hover:bg-slate-50/70 lg:grid-cols-[2.2fr_1fr_1fr_1fr_1fr_1.2fr]"
+							>
+								<div className="flex items-center gap-4">
+									<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 text-sm font-semibold text-white shadow-sm">
+										{customer.companyName.slice(0, 2).toUpperCase()}
+									</div>
+									<div>
+										<div className="text-base font-semibold text-slate-900">{customer.companyName}</div>
+										<div className="text-xs text-slate-500">ID · {customer.id}</div>
+									</div>
+								</div>
+								<div className="text-sm font-semibold text-slate-700">
+									{customer.contractType}
+									<div className="text-xs font-normal text-slate-500">{customer.contractLengthMonths} mo</div>
+								</div>
+								<div>
+									<span
+										className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+											customer.status === 'Active'
+												? 'bg-emerald-100 text-emerald-700'
+												: customer.status === 'Paused'
+												? 'bg-amber-100 text-amber-700'
+												: 'bg-rose-100 text-rose-700'
+										}`}
+									>
+										{customer.status}
+									</span>
+								</div>
+								<div className="text-sm text-slate-600">
+									{runInfoCache[customer.id]?.lastRun || 'Never'}
+								</div>
+								<div className="text-sm text-slate-600">
+									{runInfoCache[customer.id]?.nextRun || 'None'}
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									<button
+										onClick={() => navigate(`/admin/portal/customers/${customer.id}`)}
+										className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:shadow-md"
+									>
+										View
+										<ChevronRight className="h-3.5 w-3.5" />
+									</button>
+									<button
+										onClick={() => handleEdit(customer)}
+										className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+									>
+										<PencilLine className="h-3.5 w-3.5" />
+										Edit
+									</button>
+									{customer.status === 'Active' ? (
+										<button
+											onClick={() => handleStatusChange(customer.id, 'Paused')}
+											className="inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
 										>
-											{customer.status}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-gray-600">
-										{runInfoCache[customer.id]?.lastRun || 'Never'}
-									</td>
-									<td className="px-4 py-3 text-gray-600">
-										{runInfoCache[customer.id]?.nextRun || 'None'}
-									</td>
-									<td className="px-4 py-3">
-										<div className="flex gap-2">
-											<button
-												onClick={() => navigate(`/admin/portal/customers/${customer.id}`)}
-												className="text-blue-600 hover:underline"
-											>
-												View
-											</button>
-											<button
-												onClick={() => handleEdit(customer)}
-												className="text-gray-600 hover:underline"
-											>
-												Edit
-											</button>
-											{customer.status === 'Active' ? (
-												<button
-													onClick={() => handleStatusChange(customer.id, 'Paused')}
-													className="text-yellow-600 hover:underline"
-												>
-													Pause
-												</button>
-											) : customer.status === 'Paused' ? (
-												<button
-													onClick={() => handleStatusChange(customer.id, 'Active')}
-													className="text-green-600 hover:underline"
-												>
-													Resume
-												</button>
-											) : null}
-										</div>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
+											<PauseCircle className="h-3.5 w-3.5" />
+											Pause
+										</button>
+									) : customer.status === 'Paused' ? (
+										<button
+											onClick={() => handleStatusChange(customer.id, 'Active')}
+											className="inline-flex items-center gap-1 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+										>
+											<PlayCircle className="h-3.5 w-3.5" />
+											Resume
+										</button>
+									) : null}
+									<button
+										onClick={() => handleDelete(customer.id, customer.companyName)}
+										className="inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+									>
+										<Trash2 className="h-3.5 w-3.5" />
+										Delete
+									</button>
+								</div>
+							</div>
+						))
+					)}
+				</div>
 			</div>
 
 			{/* Add/Edit Modal */}
 			{showAddModal && (
-				<div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={(e) => {
-					if (e.target === e.currentTarget) {
-						setShowAddModal(false);
-						setEditingCustomer(null);
-					}
-				}}>
-					<div className="bg-white rounded-lg p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-						<h2 className="text-xl font-bold mb-4 text-gray-900">
-							{editingCustomer ? 'Edit Customer' : 'Add Customer'}
-						</h2>
-						<form onSubmit={editingCustomer ? handleUpdate : handleAdd} className="space-y-4">
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) {
+							setShowAddModal(false);
+							setEditingCustomer(null);
+						}
+					}}
+				>
+					<div className="w-full max-w-lg rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.6)]" onClick={(e) => e.stopPropagation()}>
+						<div className="flex items-center justify-between">
 							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-700">Company Name</label>
+								<div className="text-xs uppercase tracking-[0.3em] text-slate-400">
+									{editingCustomer ? 'Edit profile' : 'New profile'}
+								</div>
+								<h2 className="mt-2 text-2xl font-semibold text-slate-900">
+									{editingCustomer ? 'Edit Customer' : 'Add Customer'}
+								</h2>
+							</div>
+							<div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700" />
+						</div>
+						<form onSubmit={editingCustomer ? handleUpdate : handleAdd} className="mt-6 space-y-4">
+							<div>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Company Name</label>
 								<input
 									type="text"
 									required
 									value={formData.companyName}
 									onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-									className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
 							</div>
 							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-700">Contract Type</label>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Contract Type</label>
 								<select
 									value={formData.contractType}
 									onChange={(e) => setFormData({ ...formData, contractType: e.target.value as ContractType })}
-									className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								>
 									<option value="Foundation">Foundation</option>
 									<option value="Pro">Pro</option>
@@ -248,52 +402,52 @@ export function CustomersListPage() {
 								</select>
 							</div>
 							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-700">Contract Start Date</label>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Contract Start Date</label>
 								<input
 									type="date"
 									required
 									value={formData.contractStartDate}
 									onChange={(e) => setFormData({ ...formData, contractStartDate: e.target.value })}
-									className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
 							</div>
 							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-700">Contract Length (months)</label>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Contract Length (months)</label>
 								<input
 									type="number"
 									required
 									min="1"
 									value={formData.contractLengthMonths}
 									onChange={(e) => setFormData({ ...formData, contractLengthMonths: parseInt(e.target.value) })}
-									className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
 							</div>
 							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-700">Status</label>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Status</label>
 								<select
 									value={formData.status}
 									onChange={(e) => setFormData({ ...formData, status: e.target.value as CustomerStatus })}
-									className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								>
 									<option value="Active">Active</option>
 									<option value="Paused">Paused</option>
 									<option value="Cancelled">Cancelled</option>
 								</select>
 							</div>
-							<div className="flex gap-2 justify-end pt-4">
+							<div className="flex flex-wrap gap-2 justify-end pt-4">
 								<button
 									type="button"
 									onClick={() => {
 										setShowAddModal(false);
 										setEditingCustomer(null);
 									}}
-									className="px-4 py-2 border border-gray-300 rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+									className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								>
 									Cancel
 								</button>
 								<button
 									type="submit"
-									className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+									className="rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-slate-900/40 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								>
 									{editingCustomer ? 'Update' : 'Create'}
 								</button>
@@ -305,4 +459,3 @@ export function CustomersListPage() {
 		</div>
 	);
 }
-

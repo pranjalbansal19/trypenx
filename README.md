@@ -32,6 +32,14 @@ npm install
    
    # OpenAI API key (optional - for AI folder conversion)
    VITE_OPENAI_API_KEY=your_openai_api_key_here
+   
+   # API base (frontend -> backend)
+   VITE_API_BASE_URL=/api
+   
+   # Backend / database
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cybersentry_dev?schema=public
+   CORS_ORIGIN=http://localhost:5173
+   PUBLIC_API_BASE_URL=http://localhost:4000
    ```
    - **Password Protection**: Set `VITE_APP_PASSWORD` to protect the application. If not set, defaults to `CyberSentry2024!`
    - **OpenAI API Key**: Get your API key from https://platform.openai.com/api-keys
@@ -40,10 +48,34 @@ npm install
 ```bash
 npm run dev
 ```
-4. Build for production
+4. Run API server (separate terminal)
+```bash
+npm run dev:server
+```
+5. Build for production
 ```bash
 npm run build && npm run preview
 ```
+
+## Backend (API + Database)
+This repo includes an Express + Prisma API to replace the in-memory admin data with a real database.
+
+### Local database (Postgres)
+You can use any local Postgres instance. Example with Docker:
+```bash
+docker run --name cybersentry-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cybersentry_dev -p 5432:5432 -d postgres:16
+```
+
+Then run migrations:
+```bash
+npm run prisma:migrate
+```
+
+### Production database
+Set `DATABASE_URL` to your production Postgres instance in your hosting environment. Keep the same schema and run migrations during deployment.
+
+### File storage (consent agreements)
+Consent files are stored in the database as binary blobs for this MVP. For larger files or higher scale, move files to object storage (S3/Supabase Storage) and store only metadata + URL in the database.
 
 ## Password Protection
 The application is protected by a password prompt that appears before accessing any page. 
