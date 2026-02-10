@@ -9,7 +9,6 @@ import type {
   Report,
 } from '../types/admin'
 import * as adminApi from '../services/adminApi'
-import { showToast } from './toastStore'
 
 interface AdminState {
   // Data
@@ -111,9 +110,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       ])
 
       set((state) => ({
-        customers: state.customers.some((c) => c.id === id)
-          ? state.customers.map((c) => (c.id === id ? customer : c))
-          : [customer, ...state.customers],
         scopes: { ...state.scopes, [id]: scopes },
         testConfigs: { ...state.testConfigs, [id]: testConfig },
         testRuns: { ...state.testRuns, [id]: testRuns },
@@ -131,22 +127,12 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const customer = await adminApi.createCustomer(data)
-      showToast({
-        variant: 'success',
-        title: 'Customer created',
-        message: `${customer.companyName} added successfully.`,
-      })
       set((state) => ({
         customers: [...state.customers, customer],
         loading: false,
       }))
       return customer
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Customer creation failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
       throw error
     }
@@ -156,21 +142,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const updated = await adminApi.updateCustomer(id, data)
-      showToast({
-        variant: 'success',
-        title: 'Customer updated',
-        message: `${updated.companyName} saved successfully.`,
-      })
       set((state) => ({
         customers: state.customers.map((c) => (c.id === id ? updated : c)),
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Customer update failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -179,11 +155,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await adminApi.deleteCustomer(id)
-      showToast({
-        variant: 'success',
-        title: 'Customer deleted',
-        message: 'The customer record was removed.',
-      })
       set((state) => ({
         customers: state.customers.filter((c) => c.id !== id),
         scopes: { ...state.scopes, [id]: [] },
@@ -195,11 +166,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Customer deletion failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -219,11 +185,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const scope = await adminApi.createScope(data)
-      showToast({
-        variant: 'success',
-        title: 'Scope added',
-        message: 'Scope item saved successfully.',
-      })
       set((state) => ({
         scopes: {
           ...state.scopes,
@@ -232,11 +193,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Scope creation failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -245,11 +201,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const updated = await adminApi.updateScope(id, data)
-      showToast({
-        variant: 'success',
-        title: 'Scope updated',
-        message: 'Scope changes saved.',
-      })
       set((state) => ({
         scopes: {
           ...state.scopes,
@@ -260,11 +211,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Scope update failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -273,11 +219,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await adminApi.deleteScope(id)
-      showToast({
-        variant: 'success',
-        title: 'Scope removed',
-        message: 'Scope item deleted successfully.',
-      })
       set((state) => ({
         scopes: {
           ...state.scopes,
@@ -288,11 +229,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Scope deletion failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -312,21 +248,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const config = await adminApi.createTestConfig(data)
-      showToast({
-        variant: 'success',
-        title: 'Test configuration saved',
-        message: 'Scheduling preferences updated.',
-      })
       set((state) => ({
         testConfigs: { ...state.testConfigs, [data.customerId]: config },
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Test configuration failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -386,11 +312,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const updated = await adminApi.updateReport(id, data)
-      showToast({
-        variant: 'success',
-        title: 'Report updated',
-        message: 'Report status saved successfully.',
-      })
       set((state) => ({
         allReports: state.allReports.map((r) => (r.id === id ? updated : r)),
         reports: Object.fromEntries(
@@ -402,11 +323,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Report update failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -426,11 +342,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const consent = await adminApi.uploadConsent(customerId, file, agreedAt)
-      showToast({
-        variant: 'success',
-        title: 'Consent uploaded',
-        message: `${consent.fileName} uploaded successfully.`,
-      })
       set((state) => ({
         consents: {
           ...state.consents,
@@ -440,11 +351,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }))
       return consent
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Consent upload failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
       throw error
     }
@@ -454,11 +360,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await adminApi.deleteConsent(id)
-      showToast({
-        variant: 'success',
-        title: 'Consent removed',
-        message: 'The consent document was deleted.',
-      })
       set((state) => ({
         consents: {
           ...state.consents,
@@ -469,11 +370,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Consent deletion failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },
@@ -493,11 +389,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const note = await adminApi.createNote({ customerId, content })
-      showToast({
-        variant: 'success',
-        title: 'Note added',
-        message: 'Your note was saved.',
-      })
       set((state) => ({
         notes: {
           ...state.notes,
@@ -507,11 +398,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }))
       return note
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Note creation failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
       throw error
     }
@@ -521,11 +407,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await adminApi.deleteNote(id)
-      showToast({
-        variant: 'success',
-        title: 'Note deleted',
-        message: 'The note was removed.',
-      })
       set((state) => ({
         notes: {
           ...state.notes,
@@ -536,11 +417,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         loading: false,
       }))
     } catch (error) {
-      showToast({
-        variant: 'error',
-        title: 'Note deletion failed',
-        message: (error as Error).message,
-      })
       set({ error: (error as Error).message, loading: false })
     }
   },

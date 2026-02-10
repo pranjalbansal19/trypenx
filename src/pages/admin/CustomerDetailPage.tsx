@@ -404,7 +404,7 @@ function ConsentTab({
 
 	const downloadConsent = (c: CustomerConsent) => {
 		const a = document.createElement('a');
-		a.href = c.downloadUrl;
+		a.href = c.fileData;
 		a.download = c.fileName;
 		a.click();
 	};
@@ -906,3 +906,4 @@ function ReportsTab({ customerId, reports }: { customerId: string; reports: any[
 		</div>
 	);
 }
+

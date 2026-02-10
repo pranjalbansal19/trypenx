@@ -562,8 +562,8 @@ OUTPUT REQUIREMENTS FOR AGGRESSIVE MODE:
 
     const descriptionFormat =
       request.pentestType === 'aggressive'
-        ? '**Description:** [NO ONE-LINERS. EXTREMELY DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) with extensive technical detail explaining the security issue, how it works, why it exists, and the technical implications. Include CVE references, CVSS scores, and industry-standard classifications. Describe the vulnerability in depth, explain the root cause, and provide context about how this type of vulnerability is typically exploited in real-world attacks. Never a single sentence.]'
-        : '**Description:** [NO ONE-LINERS. EXTENSIVE, DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) explaining the security observation in business terms. This must be substantial content that provides real value. CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS: DO NOT use phrases like "allows unauthenticated remote code execution", "attacker could gain full control", "immediate risk", "system is at risk of total compromise". Instead, use language like: "A version associated with [CVE number] was observed", "Exploitability depends on runtime configuration", "Warrants validation", "May increase exposure if left unreviewed". Frame as potential exposure that warrants review, not confirmed exploitable vulnerability. Include detailed context about what was observed, why it matters, and what it means for the organization. Never a single sentence.]'
+        ? '**Description:** [EXTREMELY DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) with extensive technical detail explaining the security issue, how it works, why it exists, and the technical implications. Include CVE references, CVSS scores, and industry-standard classifications. Describe the vulnerability in depth, explain the root cause, and provide context about how this type of vulnerability is typically exploited in real-world attacks.]'
+        : '**Description:** [EXTENSIVE, DETAILED explanation - at least 8-12 sentences (2-3 paragraphs minimum) explaining the security observation in business terms. This must be substantial content that provides real value. CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS: DO NOT use phrases like "allows unauthenticated remote code execution", "attacker could gain full control", "immediate risk", "system is at risk of total compromise". Instead, use language like: "A version associated with [CVE number] was observed", "Exploitability depends on runtime configuration", "Warrants validation", "May increase exposure if left unreviewed". Frame as potential exposure that warrants review, not confirmed exploitable vulnerability. Include detailed context about what was observed, why it matters, and what it means for the organization.]'
 
     const technicalDetailsSection =
       request.pentestType === 'aggressive'
@@ -572,13 +572,13 @@ OUTPUT REQUIREMENTS FOR AGGRESSIVE MODE:
 
     const whatWasFoundFormat =
       request.pentestType === 'aggressive'
-        ? '**What Was Found:** [NO ONE-LINERS. EXTENSIVE technical explanation (2-3 paragraphs minimum, 8-12+ sentences) with detailed evidence, proof-of-concept results, and validation outcomes. Include specific IP addresses, ports, services, and configurations affected. Describe exactly what was discovered during testing. Never reduce to a single sentence.]'
-        : '**What Was Found:** [NO ONE-LINERS. EXTENSIVE, DETAILED explanation (2-3 paragraphs minimum, 8-12 sentences) of the security observation without technical jargon - use business-friendly descriptions. Include specific details about what was observed, where it was found, and what it indicates. Provide comprehensive context about the finding, its implications, and why it warrants attention. Never a single sentence.]'
+        ? '**What Was Found:** [EXTENSIVE technical explanation (2-3 paragraphs minimum) with detailed evidence, proof-of-concept results, and validation outcomes. Include specific IP addresses, ports, services, and configurations affected. Describe exactly what was discovered during testing, including all technical details, service versions, configurations, and any other relevant information. Show the complete picture of what was found.]'
+        : '**What Was Found:** [EXTENSIVE, DETAILED explanation (2-3 paragraphs minimum, 8-12 sentences) of the security observation without technical jargon - use business-friendly descriptions. Include specific details about what was observed, where it was found, and what it indicates. Provide comprehensive context about the finding, its implications, and why it warrants attention. This must be substantial content that provides real value to the reader.]'
 
     const affectedSystemsFormat =
       request.pentestType === 'aggressive'
-        ? '**Affected Systems:** [NO ONE-LINERS. List affected applications/systems with specific IP addresses, ports, and service versions in a table when multiple. Then add 2-4 sentences of context: scope of exposure, which environments, and why these systems matter. Minimum 4-6 lines of content.]'
-        : '**Affected Systems:** [NO ONE-LINERS. List affected applications/systems in business terms (Customer portal, Payment system, etc.) in a table when multiple. Then add 2-4 sentences explaining scope, which business areas are impacted, and context. Minimum 4-6 lines of content.]'
+        ? '**Affected Systems:** [List affected applications/systems with specific IP addresses, ports, and service versions. Format as a table when multiple systems are affected. Include all IP addresses, ports, and service details from the data.]'
+        : '**Affected Systems:** [List affected applications/systems in business terms - Customer portal, Payment system, etc. - not technical names. Format as a table when multiple systems are affected.]'
 
     const attackSurfaceSection =
       request.pentestType === 'aggressive'
@@ -587,8 +587,8 @@ OUTPUT REQUIREMENTS FOR AGGRESSIVE MODE:
 
     const riskScenarioFormat =
       request.pentestType === 'aggressive'
-        ? '**Risk Scenario:** [NO ONE-LINERS. Minimum 2-3 paragraphs (6-10+ sentences). Explain the business risk - what could happen if this is not fixed, including potential attack chains and lateral movement paths. INCLUDE URGENCY: Add factual statements about how quickly such vulnerabilities are discovered and exploited. Expand with concrete scenarios and consequences.]'
-        : '**Risk Scenario:** [NO ONE-LINERS. Minimum 2-3 paragraphs (6-10+ sentences). Frame as potential risk if left unreviewed. Use conditional, future-looking language. Expand with what could happen over time, which business processes could be affected, and why review is warranted. Never reduce to a single sentence.]'
+        ? '**Risk Scenario:** [Explain the business risk - what could happen if this is not fixed, including potential attack chains and lateral movement paths. INCLUDE URGENCY: Add factual statements about how quickly such vulnerabilities are discovered and exploited, e.g., "These issues are routinely exploited by automated scanners within days of exposure."]'
+        : '**Risk Scenario:** [For vulnerability scans: Frame this as potential risk if left unreviewed, not confirmed exploitable. CRITICAL LANGUAGE REQUIREMENTS: DO NOT use phrases like "severe risk", "business continuity", "data breaches", "complete system compromise", "attacker could", "could lead to". Instead, use conditional, future-looking language like: "If left unreviewed, externally visible misconfigurations and outdated services may increase the likelihood of security incidents over time", "May warrant review to assess real-world risk", "May increase exposure if configuration issues are not addressed". Frame as visibility over time, not increasing risk. Create awareness without fear-mongering.]'
 
     const howToExploitFormat =
       request.pentestType === 'aggressive'
@@ -815,12 +815,10 @@ CRITICAL REQUIREMENTS:
    - Include detailed explanations, not just bullet points
    
    - FORBIDDEN CONTENT (DO NOT DO THIS):
-     * One-liners in ANY finding section: Description, What Was Found, Business Impact, Affected Systems, Risk Scenario, or Recommendation as a single sentence or single line
      * Single-line descriptions (e.g., "Implement firewall rules within 48 hours.")
-     * Generic one-liners (e.g., "Secure backup directories.", "Restrict the service.", "Disable SSLv3.")
+     * Generic one-liners (e.g., "Secure backup directories.")
      * Brief statements without context (e.g., "Deploy emergency monitoring.")
      * Lists without explanations (just bullet points with no detail)
-     * Findings where Description is one sentence, Recommendation is one sentence, or any of the six mandatory sections are abbreviated to a single line
    
    - REQUIRED CONTENT STRUCTURE:
      * Start with context (2-3 sentences explaining the situation)
@@ -893,7 +891,7 @@ ${
   - 3.4 Port Analysis
   - 3.5 Attack Vector Analysis
   - 3.6 Exposure Assessment
-- 4. Detailed Findings (EACH finding 4.X MUST include all 6 mandatory sections: Description, What Was Found, Business Impact, Affected Systems, Risk Scenario, Recommendation)
+- 4. Detailed Findings
   - 4.1 [First Finding Title]
   - 4.2 [Second Finding Title]
   - 4.3 [Third Finding Title]
@@ -1407,10 +1405,10 @@ DO NOT:
 - Skip any findings from the register
 - Combine multiple findings into one section
 
-For EACH finding in the Findings Register, provide COMPREHENSIVE details that thoroughly explain each vulnerability. NO ONE-LINERS: Every section (Description, What Was Found, Business Impact, Affected Systems, Risk Scenario, Recommendation) must be multiple paragraphs or multiple sentences. Single-sentence or single-line content is FORBIDDEN. ${
+For EACH finding in the Findings Register, provide COMPREHENSIVE details that thoroughly explain each vulnerability. ${
       request.pentestType === 'aggressive'
         ? 'For AGGRESSIVE mode: This section should be EXTENSIVE (8-12+ pages) with MAXIMUM detail and BEEFY content. Each CRITICAL/HIGH finding should be 6-10 paragraphs minimum (2-3 pages per finding) with extensive technical depth. MANDATORY: EVERY finding MUST include actual exploitation commands in code blocks - commands are NOT optional. Content must be EXTREMELY descriptive - explain every detail of the vulnerability, exploitation process, and impact. CRITICAL: The folder contains data from MULTIPLE IP ADDRESSES of the same domain - document findings for EACH IP separately with extensive detail. Create dedicated subsections for each IP address showing port scans, services, vulnerabilities, and exploitation results with complete command outputs. Show REAL attack scenarios with actual exploitation evidence. For SOFT mode: This section should be COMPREHENSIVE (3-5 pages) with detailed analysis for each finding. Each finding should be 2-3 paragraphs minimum with thorough explanations.'
-        : 'For SOFT mode: This section should be EXTENSIVE and COMPREHENSIVE (5-10+ pages) with MAXIMUM detail and substantial content. Each finding should be 4-6 paragraphs minimum (1-2 pages per finding) with thorough explanations, detailed technical context, comprehensive business impact analysis, and extensive remediation guidance. Include ALL findings from the data - do not skip any. Content must be substantial and provide real value - NO one-liners, NO brief summaries, NO single-sentence sections allowed.'
+        : 'For SOFT mode: This section should be EXTENSIVE and COMPREHENSIVE (5-10+ pages) with MAXIMUM detail and substantial content. Each finding should be 4-6 paragraphs minimum (1-2 pages per finding) with thorough explanations, detailed technical context, comprehensive business impact analysis, and extensive remediation guidance. Include ALL findings from the data - do not skip any. Content must be substantial and provide real value - no brief summaries allowed.'
     }
 
 - For EVERY finding (Critical, High, Medium, Low), include:
@@ -1429,32 +1427,13 @@ ${
 - Attack scenarios (1-2 paragraphs for aggressive mode) - explain how an attacker would exploit this in detail
 - Current state assessment - what's currently happening
 
-🚨 MANDATORY SECTIONS FOR EVERY VULNERABILITY - A REPORT WITHOUT ALL SIX IS INCOMPLETE:
-Every single finding MUST include ALL of the following sections. Do not skip any. Without these six points, the report is bad and incomplete.
-1. **Description** - What the vulnerability/observation is and why it matters
-2. **What Was Found** - Detailed explanation of what was observed, where, and what it indicates
-3. **Business Impact** - Financial, operational, and reputational consequences (framed per report type)
-4. **Affected Systems** - Which systems, components, IPs, or services are impacted (table when multiple)
-5. **Risk Scenario** - What could happen if left unaddressed; attack/risk scenario (framed per report type)
-6. **Recommendation** - Specific, actionable remediation steps
-
-🚨 ZERO TOLERANCE FOR ONE-LINERS - CRITICAL:
-DO NOT write single-sentence or single-line content for ANY of the six sections above. One-liners make the report bad and unprofessional.
-- **Description:** Minimum 2-3 paragraphs (8-12+ sentences). Never a single sentence.
-- **What Was Found:** Minimum 2-3 paragraphs (8-12+ sentences). Never a single sentence.
-- **Business Impact:** Minimum 2-3 paragraphs (8-12+ sentences). Never a single sentence.
-- **Affected Systems:** Full table or list with context; add 2-4 sentences explaining scope and context. Never just one line.
-- **Risk Scenario:** Minimum 2 paragraphs (6-10+ sentences). Never a single sentence.
-- **Recommendation:** Minimum 2-3 paragraphs or 5+ bullet points with explanation. Never a single sentence like "Restrict the service" or "Disable SSLv3."
-FORBIDDEN: Any section that is one sentence, one line, or a brief phrase. Every section must have substantial, multi-paragraph or multi-sentence content.
-
 Format each finding as:
 ${findingTitleFormat}
 ${severityFormat}
 ${descriptionFormat}
-${technicalDetailsSection}**Business Impact:** [NO ONE-LINERS. Minimum 2-3 paragraphs (8-12+ sentences). ${
+${technicalDetailsSection}**Business Impact:** [${
       request.pentestType === 'aggressive'
-        ? 'COMPREHENSIVE business impact - explain financial risks (potential losses, fines), operational risks (service disruption), reputational risks (customer trust, brand damage). INCLUDE URGENCY FRAMING: Add factual statements about exploitation timelines. Create urgency without fear-mongering. Never a single sentence.'
+        ? 'COMPREHENSIVE business impact - explain financial risks (potential losses, fines), operational risks (service disruption), reputational risks (customer trust, brand damage). INCLUDE URGENCY FRAMING: Add factual statements about exploitation timelines, such as "These vulnerabilities are routinely exploited by automated scanners within days of exposure" or "Similar issues have been exploited within [timeframe] in [industry context]." Create urgency without fear-mongering.'
         : `CRITICAL LANGUAGE REQUIREMENTS FOR VULNERABILITY SCANS (3-4 paragraphs, 12-16 sentences):
 
 MANDATORY TONE - This must NOT read like a verdict or incident-response conclusion:
@@ -1480,20 +1459,13 @@ GENERAL PREFERRED PHRASING:
 - "may warrant validation" (NOT "confirms vulnerability")
 - "represents an area for security posture improvement" (NOT "causes business impact")
 
-MINDSET: The tone should be guiding, not judging. Frame as potential risks that may warrant review, not confirmed exploitable vulnerabilities. Focus on visibility and awareness, not declarative business impact. Explain that actual business impact depends on validation and context. Never a single sentence - always 3-4 paragraphs minimum.`
+MINDSET: The tone should be guiding, not judging. Frame as potential risks that may warrant review, not confirmed exploitable vulnerabilities. Focus on visibility and awareness, not declarative business impact. Explain that actual business impact depends on validation and context.`
     }]
 ${whatWasFoundFormat}
 ${affectedSystemsFormat}
 ${attackSurfaceSection}${riskScenarioFormat}
 
 ${howToExploitFormat}
-
-**Recommendation:** [NO ONE-LINERS. Minimum 2-3 paragraphs OR 5+ bullet points with 1-2 sentences each. DETAILED, SPECIFIC remediation steps - explain what needs to be done${
-      request.pentestType === 'aggressive'
-        ? ' with technical implementation details, configuration changes, code fixes, and step-by-step remediation procedures for each affected IP address'
-        : ' in business terms, not just technical steps'
-    }. Never write a single sentence like "Restrict the service" or "Disable X." Expand each action with why and how. IF THIS INVOLVES THIRD-PARTY PLATFORMS (Shopify, Cloudflare, AWS, WordPress, etc.), INCLUDE EDUCATIONAL CONTENT: Explain that while the platform secures its infrastructure, ${domainName} remains responsible for configuration, APIs, subdomains, and development environments. Use statements like: "While [Platform] secures the platform itself, responsibility for [specific areas] remains with ${domainName}."]
-**Priority:** [Urgency level in Title Case - Critical/High/Medium/Low with business justification - why this matters to the business]
 
 CRITICAL FORMATTING REQUIREMENTS:
 
@@ -1545,6 +1517,13 @@ For risk matrices:
 - Every vulnerability detail and evidence
 - Every table, list, and structured data
 - Do NOT summarize or omit - include EVERYTHING
+
+**Recommendation:** [DETAILED, SPECIFIC remediation steps - explain what needs to be done${
+      request.pentestType === 'aggressive'
+        ? ' with technical implementation details, configuration changes, code fixes, and step-by-step remediation procedures for each affected IP address'
+        : ' in business terms, not just technical steps'
+    }. Use bullet points for multiple remediation actions. IF THIS INVOLVES THIRD-PARTY PLATFORMS (Shopify, Cloudflare, AWS, WordPress, etc.), INCLUDE EDUCATIONAL CONTENT: Explain that while the platform secures its infrastructure, ${domainName} remains responsible for configuration, APIs, subdomains, and development environments. Use statements like: "While [Platform] secures the platform itself, responsibility for [specific areas] remains with ${domainName}."]
+**Priority:** [Urgency level in Title Case - Critical/High/Medium/Low with business justification - why this matters to the business]
 
 ${
   request.pentestType === 'aggressive'
@@ -2438,21 +2417,20 @@ Penetration Test Data:
 
 SECTION COMPLETION CHECK (CRITICAL - Report is INCOMPLETE if any section is missing):
 1. Count all main sections (##) - must include: Table of Contents, Executive Summary, Scope/Methodology, Attack Surface Analysis, Detailed Findings, Risk Assessment, Recommended Next Steps, Appendices${request.pentestType === 'soft' ? ', Closing Note' : ''}
-2. For EACH finding in Section 4: verify it includes ALL 6 MANDATORY subsections - Description, What Was Found, Business Impact, Affected Systems, Risk Scenario, Recommendation - each with MULTIPLE sentences/paragraphs (no one-liners). A finding missing any of these or using one-line content makes the report incomplete.
-3. Verify Section 6 has ALL subsections: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 (check for "### 6.1", "### 6.2", etc.)
-4. Verify Section 7 has ALL subsections: 7.1, 7.2, 7.3, 7.4 (check for "### 7.1", "### 7.2", etc.)
-${request.pentestType === 'soft' ? '5. Verify Section 8 (Closing Note) exists and is the last section (check for "## Closing Note" or "## 8. Closing Note")' : '5. Verify report ends with Section 7.4 (Additional Resources)'}
-6. If ANY section from the Table of Contents is missing, the report is INCOMPLETE - you MUST continue generating until ALL sections are present
+2. Verify Section 6 has ALL subsections: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 (check for "### 6.1", "### 6.2", etc.)
+3. Verify Section 7 has ALL subsections: 7.1, 7.2, 7.3, 7.4 (check for "### 7.1", "### 7.2", etc.)
+${request.pentestType === 'soft' ? '4. Verify Section 8 (Closing Note) exists and is the last section (check for "## Closing Note" or "## 8. Closing Note")' : '4. Verify report ends with Section 7.4 (Additional Resources)'}
+5. If ANY section from the Table of Contents is missing, the report is INCOMPLETE - you MUST continue generating until ALL sections are present
 
 COUNTS VALIDATION:
-7. Check Findings Register counts: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I], Total=[C+H+M+L+I]
-8. Verify: Section 1.3 table = Section 5.2 table = Findings Register counts (ALL must match exactly)
-9. CRITICAL: Count the number of "### 4.X" headings in Section 4 - this MUST equal the total in the register
+6. Check Findings Register counts: Critical=[C], High=[H], Medium=[M], Low=[L], Informational=[I], Total=[C+H+M+L+I]
+7. Verify: Section 1.3 table = Section 5.2 table = Findings Register counts (ALL must match exactly)
+8. CRITICAL: Count the number of "### 4.X" headings in Section 4 - this MUST equal the total in the register
    - If register has 11 findings, Section 4 MUST have 11 "### 4.X" headings (4.1, 4.2, ..., 4.11)
    - If register has 15 findings, Section 4 MUST have 15 "### 4.X" headings
    - If counts don't match, you MUST generate the missing findings
-10. Verify: NO placeholder text like "(Continue with other findings...)" exists in Section 4
-11. Verify: Findings Register section is NOT included in the report (it's internal only)
+9. Verify: NO placeholder text like "(Continue with other findings...)" exists in Section 4
+10. Verify: Findings Register section is NOT included in the report (it's internal only)
 
 🚨 IF ANY CHECK FAILS: The report is INCOMPLETE. You MUST continue generating until ALL sections are present and ALL checks pass. Do NOT stop at section 6.2 or any other section - continue until ALL sections are complete.
 
@@ -2462,7 +2440,7 @@ MANDATORY SECTIONS THAT MUST BE INCLUDED (verify ALL are present):
 - Section 1: Executive Summary (with all subsections)
 - Section 2: Scope/Methodology (with all subsections 2.1-2.5)
 - Section 3: Attack Surface Analysis (with all subsections 3.1-3.6)
-- Section 4: Detailed Findings (ALL findings from register - one section per finding; EACH finding MUST include: Description, What Was Found, Business Impact, Affected Systems, Risk Scenario, Recommendation)
+- Section 4: Detailed Findings (ALL findings from register - one section per finding)
 - Section 5: Risk Assessment (with all subsections 5.1-5.6)
 - Section 6: Recommended Next Steps (with ALL subsections 6.1, 6.2, 6.3, 6.4, 6.5, 6.6)
 - Section 7: Appendices (with ALL subsections 7.1, 7.2, 7.3, 7.4)
