@@ -1,8 +1,18 @@
 import 'dotenv/config'
 import cors from 'cors'
-import express from 'express'
-import multer from 'multer'
-import { ContractType, CustomerStatus, Frequency, Prisma, PrismaClient, ReportStatus, ScopeType, TestRunStatus, TestType } from '@prisma/client'
+import express, { type NextFunction, type Request, type Response } from 'express'
+import multer, { MulterError } from 'multer'
+import {
+  ContractType,
+  CustomerStatus,
+  Frequency,
+  Prisma,
+  PrismaClient,
+  ReportStatus,
+  ScopeType,
+  TestRunStatus,
+  TestType,
+} from '@prisma/client'
 
 const app = express()
 const prisma = new PrismaClient()
@@ -12,7 +22,13 @@ const apiBaseUrl = (process.env.PUBLIC_API_BASE_URL || '').replace(/\/$/, '')
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
   : true
+const adminIpAllowlist = (process.env.ADMIN_IP_ALLOWLIST || '')
+  .split(',')
+  .map((ip) => ip.trim())
+  .filter(Boolean)
+const allowlistEnabled = adminIpAllowlist.length > 0
 
+app.set('trust proxy', true)
 app.use(cors({ origin: corsOrigins }))
 app.use(express.json({ limit: '2mb' }))
 
@@ -53,6 +69,37 @@ function isNotFoundError(error: unknown): boolean {
 function consentDownloadUrl(id: string): string {
   return `${apiBaseUrl}/api/consents/${id}/download`
 }
+
+function normalizeIp(ip: string): string {
+  return ip.replace('::ffff:', '').trim()
+}
+
+function getRequestIp(req: Request): string | null {
+  const forwardedFor = req.headers['x-forwarded-for']
+  if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
+    return normalizeIp(forwardedFor.split(',')[0] ?? '')
+  }
+  if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
+    return normalizeIp(forwardedFor[0] ?? '')
+  }
+  if (req.ip) {
+    return normalizeIp(req.ip)
+  }
+  return null
+}
+
+app.use('/api', (req, res, next) => {
+  if (!allowlistEnabled) {
+    next()
+    return
+  }
+  const ip = getRequestIp(req)
+  if (ip && adminIpAllowlist.includes(ip)) {
+    next()
+    return
+  }
+  res.status(403).json({ error: 'Forbidden' })
+})
 
 function serializeTestRun(
   run: {
@@ -759,8 +806,8 @@ app.delete('/api/consents/:id', async (req, res) => {
   }
 })
 
-app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (error instanceof multer.MulterError) {
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof MulterError) {
     res.status(400).json({ error: error.message })
     return
   }
