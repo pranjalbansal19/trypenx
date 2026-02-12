@@ -53,26 +53,33 @@ function consentDownloadUrl(id) {
 function normalizeIp(ip) {
     return ip.replace('::ffff:', '').trim();
 }
-function getRequestIp(req) {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
-        return normalizeIp(forwardedFor.split(',')[0] ?? '');
+function extractIps(value) {
+    if (!value)
+        return [];
+    if (Array.isArray(value)) {
+        return value.flatMap((entry) => entry.split(',').map((item) => normalizeIp(item)));
     }
-    if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-        return normalizeIp(forwardedFor[0] ?? '');
-    }
-    if (req.ip) {
-        return normalizeIp(req.ip);
-    }
-    return null;
+    return value.split(',').map((item) => normalizeIp(item));
+}
+function getRequestIps(req) {
+    const forwardedFor = extractIps(req.headers['x-forwarded-for']);
+    const realIp = extractIps(req.headers['x-real-ip']);
+    const cfConnectingIp = extractIps(req.headers['cf-connecting-ip']);
+    const trueClientIp = extractIps(req.headers['true-client-ip']);
+    const socketIp = req.socket?.remoteAddress
+        ? [normalizeIp(req.socket.remoteAddress)]
+        : [];
+    const expressIp = req.ip ? [normalizeIp(req.ip)] : [];
+    return Array.from(new Set([...forwardedFor, ...realIp, ...cfConnectingIp, ...trueClientIp, ...expressIp, ...socketIp].filter(Boolean)));
 }
 app.use('/api', (req, res, next) => {
     if (!allowlistEnabled) {
         next();
         return;
     }
-    const ip = getRequestIp(req);
-    if (ip && adminIpAllowlist.includes(ip)) {
+    const ips = getRequestIps(req);
+    const allowed = ips.some((ip) => adminIpAllowlist.includes(ip));
+    if (allowed) {
         next();
         return;
     }

@@ -3,7 +3,14 @@
   to = "/index.html"
   status = 200
 
+[[edge_functions]]
+  function = "ip-allowlist"
+  path = "/admin/portal"
+
+[[edge_functions]]
+  function = "ip-allowlist"
+  path = "/admin/portal/*"
+
 [build]
   publish = "dist"
   command = "npm run build"
-
