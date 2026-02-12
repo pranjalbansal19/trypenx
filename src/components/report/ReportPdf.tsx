@@ -150,6 +150,10 @@ function parseTableRow(line: string): string[] {
   return content.split('|').map((cell) => cell.trim())
 }
 
+// Rows per chunk so each table chunk fits on one page (avoids row splitting)
+const TABLE_ROWS_PER_CHUNK_TWO_COL = 6   // glossary: header + 5 data rows
+const TABLE_ROWS_PER_CHUNK_MULTI = 10    // wider tables
+
 // Helper function to check if a line is a table separator
 function isTableSeparator(line: string): boolean {
   const trimmed = line.trim()
@@ -2557,131 +2561,113 @@ export function ReportPdf({
                         const rows = item.content as string[][]
                         if (rows.length === 0) return null
 
-                        return (
-                          <View
-                            key={item.key}
-                            style={styles.table}
-                            wrap={false}
-                          >
-                            {rows.map((row, rowIndex) => {
-                              const isHeader = rowIndex === 0
-                              return (
-                                <View
-                                  key={`${item.key}-row-${rowIndex}`}
-                                  style={[
-                                    isHeader
-                                      ? styles.tableHeaderRow
-                                      : styles.tableRow,
-                                    { width: '100%' },
-                                  ]}
-                                  wrap={false}
-                                >
-                                  {row.map((cell, cellIndex) => {
-                                    const isLastCell =
-                                      cellIndex === row.length - 1
-                                    // For 2-column tables (like glossary), set specific widths
-                                    const isTwoColumnTable = rows[0]?.length === 2
-                                    const columnWidthStyle = isTwoColumnTable
-                                      ? cellIndex === 0
-                                        ? { width: '35%' as const, flex: 0 }
-                                        : { width: '65%' as const, flex: 0 }
-                                      : {}
-                                    
-                                    const baseCellStyle = isHeader
-                                      ? styles.tableHeaderCell
-                                      : styles.tableCell
-                                    
-                                    const cellStyle = [
-                                      baseCellStyle,
-                                      isLastCell ? { borderRightWidth: 0 } : {},
-                                      columnWidthStyle,
-                                    ]
-                                    
-                                    // Remove asterisks and detect if text should be bold
-                                    const cleanCell = cell
-                                      .replace(/\*\*/g, '')
-                                      .trim()
-                                    const shouldBeBold =
-                                      cell.includes('**') ||
-                                      (rowIndex > 0 &&
-                                        cellIndex === 0 &&
-                                        cleanCell
-                                          .toLowerCase()
-                                          .includes('overall risk rating'))
+                        const headerRow = rows[0]
+                        if (!headerRow) return null
+                        const isTwoColumnTable = headerRow.length === 2
+                        const rowsPerChunk = isTwoColumnTable
+                          ? TABLE_ROWS_PER_CHUNK_TWO_COL
+                          : TABLE_ROWS_PER_CHUNK_MULTI
+                        const dataRows = rows.slice(1)
+                        const chunks: string[][][] = []
+                        for (let i = 0; i < dataRows.length; i += rowsPerChunk) {
+                          const chunkData = dataRows.slice(i, i + rowsPerChunk)
+                          chunks.push([headerRow, ...chunkData])
+                        }
+                        if (chunks.length === 0) chunks.push([headerRow])
 
-                                    // Detect if this is a severity column and get color
-                                    let severityColor = null
-                                    if (!isHeader && rows.length > 0) {
-                                      const headerRow = rows[0]
-                                      if (headerRow) {
-                                        const columnName =
-                                          headerRow[cellIndex]
-                                            ?.toLowerCase()
-                                            .trim() || ''
-                                        if (
-                                          columnName.includes('severity') ||
-                                          columnName.includes('priority')
-                                        ) {
-                                          const severityValue =
-                                            cleanCell.toUpperCase()
-                                          if (
-                                            severityValue.includes('CRITICAL')
-                                          ) {
-                                            severityColor = '#54081E' // Maroon
-                                          } else if (
-                                            severityValue.includes('HIGH')
-                                          ) {
-                                            severityColor = '#dc2626' // Red
-                                          } else if (
-                                            severityValue.includes('MEDIUM')
-                                          ) {
-                                            severityColor = '#ea580c' // Orange
-                                          } else if (
-                                            severityValue.includes('LOW')
-                                          ) {
-                                            severityColor = '#16a34a' // Green
-                                          } else if (
-                                            severityValue.includes(
-                                              'INFORMATIONAL'
-                                            ) ||
-                                            severityValue === 'INFO'
-                                          ) {
-                                            severityColor = '#38bdf8' // Sky blue
-                                          }
-                                        }
-                                      }
+                        const renderTableChunk = (chunkRows: string[][], chunkIndex: number) => {
+                          return chunkRows.map((row, rowIndex) => {
+                            const isHeader = rowIndex === 0
+                            return (
+                              <View
+                                key={`${item.key}-c${chunkIndex}-row-${rowIndex}`}
+                                style={[
+                                  isHeader
+                                    ? styles.tableHeaderRow
+                                    : styles.tableRow,
+                                  { width: '100%' },
+                                ]}
+                                wrap={false}
+                              >
+                                {row.map((cell, cellIndex) => {
+                                  const isLastCell = cellIndex === row.length - 1
+                                  const columnWidthStyle = isTwoColumnTable
+                                    ? cellIndex === 0
+                                      ? { width: '35%' as const, flex: 0 }
+                                      : { width: '65%' as const, flex: 0 }
+                                    : {}
+                                  const baseCellStyle = isHeader
+                                    ? styles.tableHeaderCell
+                                    : styles.tableCell
+                                  const cellStyle = [
+                                    baseCellStyle,
+                                    isLastCell ? { borderRightWidth: 0 } : {},
+                                    columnWidthStyle,
+                                  ]
+                                  const cleanCell = cell
+                                    .replace(/\*\*/g, '')
+                                    .trim()
+                                  const shouldBeBold =
+                                    cell.includes('**') ||
+                                    (rowIndex > 0 &&
+                                      cellIndex === 0 &&
+                                      cleanCell
+                                        .toLowerCase()
+                                        .includes('overall risk rating'))
+                                  let severityColor = null
+                                  if (!isHeader && chunkRows.length > 0 && headerRow) {
+                                    const columnName =
+                                      headerRow[cellIndex]?.toLowerCase().trim() || ''
+                                    if (
+                                      columnName.includes('severity') ||
+                                      columnName.includes('priority')
+                                    ) {
+                                      const severityValue = cleanCell.toUpperCase()
+                                      if (severityValue.includes('CRITICAL')) severityColor = '#54081E'
+                                      else if (severityValue.includes('HIGH')) severityColor = '#dc2626'
+                                      else if (severityValue.includes('MEDIUM')) severityColor = '#ea580c'
+                                      else if (severityValue.includes('LOW')) severityColor = '#16a34a'
+                                      else if (severityValue.includes('INFORMATIONAL') || severityValue === 'INFO') severityColor = '#38bdf8'
                                     }
-
-                                    return (
-                                      <View
-                                        key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                        style={cellStyle}
+                                  }
+                                  return (
+                                    <View
+                                      key={`${item.key}-c${chunkIndex}-cell-${rowIndex}-${cellIndex}`}
+                                      style={cellStyle}
+                                      wrap={false}
+                                    >
+                                      <Text
+                                        style={{
+                                          fontSize: 10,
+                                          fontFamily: 'Helvetica',
+                                          fontWeight: isHeader || shouldBeBold ? 700 : 400,
+                                          color: isHeader ? '#ffffff' : severityColor || '#111827',
+                                          lineHeight: 1.6,
+                                        }}
                                         wrap
                                       >
-                                        <Text
-                                          style={{
-                                            fontSize: isHeader ? 10 : 10,
-                                            fontFamily: 'Helvetica',
-                                            fontWeight:
-                                              isHeader || shouldBeBold
-                                                ? 700
-                                                : 400,
-                                            color: isHeader
-                                              ? '#ffffff'
-                                              : severityColor || '#111827',
-                                            lineHeight: 1.6,
-                                          }}
-                                          wrap
-                                        >
-                                          {cleanCell}
-                                        </Text>
-                                      </View>
-                                    )
-                                  })}
-                                </View>
-                              )
-                            })}
-                          </View>
+                                        {cleanCell}
+                                      </Text>
+                                    </View>
+                                  )
+                                })}
+                              </View>
+                            )
+                          })
+                        }
+
+                        return (
+                          <>
+                            {chunks.map((chunkRows, chunkIndex) => (
+                              <View
+                                key={`${item.key}-chunk-${chunkIndex}`}
+                                style={styles.table}
+                                wrap={false}
+                              >
+                                {renderTableChunk(chunkRows, chunkIndex)}
+                              </View>
+                            ))}
+                          </>
                         )
                       }
 
@@ -2751,141 +2737,57 @@ export function ReportPdf({
                                   >
                                     Risk Rating Calculation:
                                   </Text>
-                                  <View style={styles.table} wrap={false}>
-                                    {tableRows.map((row, rowIndex) => {
-                                      const isHeader = rowIndex === 0
-                                      return (
-                                        <View
-                                          key={`${item.key}-row-${rowIndex}`}
-                                          style={[
-                                            isHeader
-                                              ? styles.tableHeaderRow
-                                              : styles.tableRow,
-                                            { width: '100%' },
-                                          ]}
-                                          wrap={false}
-                                        >
-                                          {row.map((cell, cellIndex) => {
-                                            const isLastCell =
-                                              cellIndex === row.length - 1
-                                            const cellStyle = isHeader
-                                              ? isLastCell
-                                                ? [
-                                                    styles.tableHeaderCell,
-                                                    { borderRightWidth: 0 },
-                                                  ]
-                                                : styles.tableHeaderCell
-                                              : isLastCell
-                                              ? [
-                                                  styles.tableCell,
-                                                  { borderRightWidth: 0 },
-                                                ]
-                                              : styles.tableCell
-
-                                            // Remove asterisks and detect if text should be bold
-                                            const cleanCell = cell
-                                              .replace(/\*\*/g, '')
-                                              .trim()
-                                            const shouldBeBold =
-                                              cell.includes('**') ||
-                                              (rowIndex > 0 &&
-                                                cellIndex === 0 &&
-                                                cleanCell
-                                                  .toLowerCase()
-                                                  .includes(
-                                                    'overall risk rating'
-                                                  ))
-
-                                            // Detect if this is a severity column and get color
-                                            let severityColor = null
-                                            if (
-                                              !isHeader &&
-                                              tableRows.length > 0
-                                            ) {
-                                              const headerRow = tableRows[0]
-                                              if (headerRow) {
-                                                const columnName =
-                                                  headerRow[cellIndex]
-                                                    ?.toLowerCase()
-                                                    .trim() || ''
-                                                if (
-                                                  columnName.includes(
-                                                    'severity'
-                                                  ) ||
-                                                  columnName.includes(
-                                                    'priority'
-                                                  )
-                                                ) {
-                                                  const severityValue =
-                                                    cleanCell.toUpperCase()
-                                                  if (
-                                                    severityValue.includes(
-                                                      'CRITICAL'
-                                                    )
-                                                  ) {
-                                                    severityColor = '#54081E' // Maroon
-                                                  } else if (
-                                                    severityValue.includes(
-                                                      'HIGH'
-                                                    )
-                                                  ) {
-                                                    severityColor = '#dc2626' // Red
-                                                  } else if (
-                                                    severityValue.includes(
-                                                      'MEDIUM'
-                                                    )
-                                                  ) {
-                                                    severityColor = '#ea580c' // Orange
-                                                  } else if (
-                                                    severityValue.includes(
-                                                      'LOW'
-                                                    )
-                                                  ) {
-                                                    severityColor = '#16a34a' // Green
-                                                  } else if (
-                                                    severityValue.includes(
-                                                      'INFORMATIONAL'
-                                                    ) ||
-                                                    severityValue === 'INFO'
-                                                  ) {
-                                                    severityColor = '#38bdf8' // Sky blue
+                                  {(() => {
+                                    const rcHeader = tableRows[0]
+                                    if (!rcHeader) return null
+                                    const rcRowsPerChunk = rcHeader.length === 2 ? TABLE_ROWS_PER_CHUNK_TWO_COL : TABLE_ROWS_PER_CHUNK_MULTI
+                                    const rcDataRows = tableRows.slice(1)
+                                    const rcChunks: string[][][] = []
+                                    for (let i = 0; i < rcDataRows.length; i += rcRowsPerChunk) {
+                                      rcChunks.push([rcHeader, ...rcDataRows.slice(i, i + rcRowsPerChunk)])
+                                    }
+                                    if (rcChunks.length === 0) rcChunks.push([rcHeader])
+                                    return rcChunks.map((chunkRows, chunkIndex) => (
+                                      <View key={`${item.key}-rc-chunk-${chunkIndex}`} style={styles.table} wrap={false}>
+                                        {chunkRows.map((row, rowIndex) => {
+                                          const isHeader = rowIndex === 0
+                                          return (
+                                            <View
+                                              key={`${item.key}-rc-${chunkIndex}-row-${rowIndex}`}
+                                              style={[isHeader ? styles.tableHeaderRow : styles.tableRow, { width: '100%' }]}
+                                              wrap={false}
+                                            >
+                                              {row.map((cell, cellIndex) => {
+                                                const isLastCell = cellIndex === row.length - 1
+                                                const cellStyle = isHeader
+                                                  ? (isLastCell ? [styles.tableHeaderCell, { borderRightWidth: 0 }] : styles.tableHeaderCell)
+                                                  : (isLastCell ? [styles.tableCell, { borderRightWidth: 0 }] : styles.tableCell)
+                                                const cleanCell = cell.replace(/\*\*/g, '').trim()
+                                                const shouldBeBold = cell.includes('**') || (rowIndex > 0 && cellIndex === 0 && cleanCell.toLowerCase().includes('overall risk rating'))
+                                                let severityColor = null
+                                                if (!isHeader && rcHeader) {
+                                                  const columnName = rcHeader[cellIndex]?.toLowerCase().trim() || ''
+                                                  if (columnName.includes('severity') || columnName.includes('priority')) {
+                                                    const v = cleanCell.toUpperCase()
+                                                    if (v.includes('CRITICAL')) severityColor = '#54081E'
+                                                    else if (v.includes('HIGH')) severityColor = '#dc2626'
+                                                    else if (v.includes('MEDIUM')) severityColor = '#ea580c'
+                                                    else if (v.includes('LOW')) severityColor = '#16a34a'
+                                                    else if (v.includes('INFORMATIONAL') || v === 'INFO') severityColor = '#38bdf8'
                                                   }
                                                 }
-                                              }
-                                            }
-
-                                            return (
-                                              <View
-                                                key={`${item.key}-cell-${rowIndex}-${cellIndex}`}
-                                                style={cellStyle}
-                                              >
-                                                <Text
-                                                  style={{
-                                                    fontSize: isHeader
-                                                      ? 10
-                                                      : 10,
-                                                    fontFamily: 'Helvetica',
-                                                    fontWeight:
-                                                      isHeader || shouldBeBold
-                                                        ? 700
-                                                        : 400,
-                                                    color: isHeader
-                                                      ? '#ffffff'
-                                                      : severityColor ||
-                                                        '#111827',
-                                                    lineHeight: 1.5,
-                                                  }}
-                                                  wrap
-                                                >
-                                                  {cleanCell}
-                                                </Text>
-                                              </View>
-                                            )
-                                          })}
-                                        </View>
-                                      )
-                                    })}
-                                  </View>
+                                                return (
+                                                  <View key={`${item.key}-rc-cell-${chunkIndex}-${rowIndex}-${cellIndex}`} style={cellStyle} wrap={false}>
+                                                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica', fontWeight: isHeader || shouldBeBold ? 700 : 400, color: isHeader ? '#ffffff' : severityColor || '#111827', lineHeight: 1.5 }} wrap>{cleanCell}</Text>
+                                                  </View>
+                                                )
+                                              })}
+                                            </View>
+                                          )
+                                        })}
+                                      </View>
+                                    ))
+                                  })()}
                                 </View>
                               )
                             }
