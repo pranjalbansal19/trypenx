@@ -48,10 +48,27 @@ export default async function handler(request: Request, context: EdgeContext) {
   const allowed = ips.some((ip) => allowlist.includes(ip))
 
   if (!allowed) {
-    const body = debugEnabled
-      ? `Access denied. Detected IPs: ${ips.join(', ') || 'none'}`
-      : 'Access denied. Your IP is not allowed.'
-    return new Response(body, {
+    if (debugEnabled) {
+      const debugPayload = {
+        detectedIps: ips,
+        contextIp: context.ip || null,
+        headers: {
+          'x-nf-client-connection-ip': request.headers.get(
+            'x-nf-client-connection-ip'
+          ),
+          'x-forwarded-for': request.headers.get('x-forwarded-for'),
+          'x-real-ip': request.headers.get('x-real-ip'),
+          'cf-connecting-ip': request.headers.get('cf-connecting-ip'),
+          'true-client-ip': request.headers.get('true-client-ip'),
+        },
+        allowlist,
+      }
+      return new Response(JSON.stringify(debugPayload, null, 2), {
+        status: 403,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      })
+    }
+    return new Response('Access denied. Your IP is not allowed.', {
       status: 403,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     })
