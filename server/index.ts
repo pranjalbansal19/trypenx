@@ -1,6 +1,12 @@
 import 'dotenv/config'
 import cors from 'cors'
-import express, { type NextFunction, type Request, type Response } from 'express'
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+  type RequestHandler,
+} from 'express'
+import fs from 'fs'
 import multer, { MulterError } from 'multer'
 import {
   ContractType,
@@ -13,6 +19,8 @@ import {
   TestRunStatus,
   TestType,
 } from '@prisma/client'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const app = express()
 const prisma = new PrismaClient()
@@ -31,6 +39,11 @@ const allowlistEnabled = adminIpAllowlist.length > 0
 app.set('trust proxy', true)
 app.use(cors({ origin: corsOrigins }))
 app.use(express.json({ limit: '2mb' }))
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const distDir = path.resolve(__dirname, '../dist')
+const adminUiEnabled = fs.existsSync(path.join(distDir, 'index.html'))
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -99,7 +112,7 @@ function getRequestIps(req: Request): string[] {
   )
 }
 
-app.use('/api', (req, res, next) => {
+const enforceAllowlist: RequestHandler = (req, res, next) => {
   if (!allowlistEnabled) {
     next()
     return
@@ -111,7 +124,17 @@ app.use('/api', (req, res, next) => {
     return
   }
   res.status(403).json({ error: 'Forbidden' })
-})
+}
+
+app.use('/api', enforceAllowlist)
+
+if (adminUiEnabled) {
+  app.use('/admin/portal', enforceAllowlist)
+  app.use('/admin/portal', express.static(distDir, { index: false }))
+  app.get('/admin/portal/*', enforceAllowlist, (_req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'))
+  })
+}
 
 function serializeTestRun(
   run: {

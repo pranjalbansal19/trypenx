@@ -1,15 +1,13 @@
 [[redirects]]
+  from = "/admin/portal/*"
+  to = "https://pentest-to-pdf.onrender.com/admin/portal/:splat"
+  status = 302
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[[edge_functions]]
-  function = "ip-allowlist"
-  path = "/admin/portal"
-
-[[edge_functions]]
-  function = "ip-allowlist"
-  path = "/admin/portal/*"
 
 [build]
   publish = "dist"
