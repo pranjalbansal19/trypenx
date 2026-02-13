@@ -89,6 +89,127 @@ function getRequestIps(req) {
         ...socketIp,
     ].filter(Boolean)));
 }
+function renderForbiddenPage(options) {
+    const { title, message, debug } = options;
+    const debugBlock = debug
+        ? `<details class="debug"><summary>Debug details</summary><pre>${JSON.stringify(debug, null, 2)}</pre></details>`
+        : '';
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(88, 107, 255, 0.18), transparent 55%),
+          radial-gradient(circle at 30% 120%, rgba(12, 174, 255, 0.16), transparent 50%),
+          #f5f7fb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        color: #0f172a;
+      }
+      .card {
+        width: min(720px, 96vw);
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow:
+          0 24px 60px rgba(15, 23, 42, 0.12),
+          0 2px 8px rgba(15, 23, 42, 0.06);
+        backdrop-filter: blur(10px);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #334155;
+        background: rgba(15, 23, 42, 0.06);
+        padding: 8px 14px;
+        border-radius: 999px;
+      }
+      h1 {
+        margin: 16px 0 12px;
+        font-size: clamp(28px, 4vw, 40px);
+      }
+      p {
+        margin: 0 0 20px;
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        border: 0;
+        padding: 12px 18px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 14px;
+        background: #0f172a;
+        color: #fff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .hint {
+        font-size: 13px;
+        color: #64748b;
+        margin-top: 14px;
+      }
+      .debug {
+        margin-top: 18px;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 16px;
+        border-radius: 12px;
+        font-size: 12px;
+      }
+      .debug summary {
+        cursor: pointer;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <span class="badge">Access Restricted</span>
+      <h1>${title}</h1>
+      <p>${message}</p>
+      <div class="actions">
+        <a class="btn" href="mailto:security@cybersentry.local">Request Access</a>
+      </div>
+      <div class="hint">Your network is not on the approved access list for this portal.</div>
+      ${debugBlock}
+    </div>
+  </body>
+</html>`;
+}
 const enforceAllowlist = (req, res, next) => {
     if (!allowlistEnabled) {
         next();
@@ -100,10 +221,11 @@ const enforceAllowlist = (req, res, next) => {
         next();
         return;
     }
-    if (allowlistDebug) {
-        res.status(403).json({
-            error: 'Forbidden',
-            detectedIps: ips,
+    const accepts = req.headers.accept || '';
+    const wantsJson = req.path.startsWith('/api') || accepts.includes('application/json');
+    const debugPayload = allowlistDebug
+        ? {
+            ips,
             headers: {
                 'x-nf-client-connection-ip': req.headers['x-nf-client-connection-ip'],
                 'x-forwarded-for': req.headers['x-forwarded-for'],
@@ -111,10 +233,24 @@ const enforceAllowlist = (req, res, next) => {
                 'cf-connecting-ip': req.headers['cf-connecting-ip'],
                 'true-client-ip': req.headers['true-client-ip'],
             },
-        });
+        }
+        : undefined;
+    if (wantsJson) {
+        res.status(403).json(allowlistDebug
+            ? { error: 'Forbidden', detectedIps: ips, headers: debugPayload?.headers }
+            : { error: 'Forbidden' });
         return;
     }
-    res.status(403).json({ error: 'Forbidden' });
+    res
+        .status(403)
+        .type('html')
+        .send(renderForbiddenPage({
+        title: 'Portal Access Denied',
+        message: 'This portal is protected and can only be accessed from approved IP addresses. If you believe this is an error, request access from your security administrator.',
+        debug: allowlistDebug && debugPayload
+            ? { ips: debugPayload.ips, headers: debugPayload.headers }
+            : undefined,
+    }));
 };
 app.use(enforceAllowlist);
 function serializeTestRun(run) {
