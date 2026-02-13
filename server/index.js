@@ -1,8 +1,11 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import fs from 'fs';
 import multer, { MulterError } from 'multer';
 import { Prisma, PrismaClient, } from '@prisma/client';
+import path from 'path';
+import { fileURLToPath } from 'url';
 const app = express();
 const prisma = new PrismaClient();
 const port = Number(process.env.PORT || 4000);
@@ -15,9 +18,14 @@ const adminIpAllowlist = (process.env.ADMIN_IP_ALLOWLIST || '')
     .map((ip) => ip.trim())
     .filter(Boolean);
 const allowlistEnabled = adminIpAllowlist.length > 0;
+const allowlistDebug = (process.env.ALLOWLIST_DEBUG || '') === '1';
 app.set('trust proxy', true);
 app.use(cors({ origin: corsOrigins }));
 app.use(express.json({ limit: '2mb' }));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distDir = path.resolve(__dirname, '../dist');
+const adminUiEnabled = fs.existsSync(path.join(distDir, 'index.html'));
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
@@ -66,13 +74,22 @@ function getRequestIps(req) {
     const realIp = extractIps(req.headers['x-real-ip']);
     const cfConnectingIp = extractIps(req.headers['cf-connecting-ip']);
     const trueClientIp = extractIps(req.headers['true-client-ip']);
+    const netlifyClientIp = extractIps(req.headers['x-nf-client-connection-ip']);
     const socketIp = req.socket?.remoteAddress
         ? [normalizeIp(req.socket.remoteAddress)]
         : [];
     const expressIp = req.ip ? [normalizeIp(req.ip)] : [];
-    return Array.from(new Set([...forwardedFor, ...realIp, ...cfConnectingIp, ...trueClientIp, ...expressIp, ...socketIp].filter(Boolean)));
+    return Array.from(new Set([
+        ...forwardedFor,
+        ...realIp,
+        ...cfConnectingIp,
+        ...trueClientIp,
+        ...netlifyClientIp,
+        ...expressIp,
+        ...socketIp,
+    ].filter(Boolean)));
 }
-app.use('/api', (req, res, next) => {
+const enforceApiAllowlist = (req, res, next) => {
     if (!allowlistEnabled) {
         next();
         return;
@@ -83,8 +100,30 @@ app.use('/api', (req, res, next) => {
         next();
         return;
     }
+    if (allowlistDebug) {
+        res.status(403).json({
+            error: 'Forbidden',
+            detectedIps: ips,
+            headers: {
+                'x-nf-client-connection-ip': req.headers['x-nf-client-connection-ip'],
+                'x-forwarded-for': req.headers['x-forwarded-for'],
+                'x-real-ip': req.headers['x-real-ip'],
+                'cf-connecting-ip': req.headers['cf-connecting-ip'],
+                'true-client-ip': req.headers['true-client-ip'],
+            },
+        });
+        return;
+    }
     res.status(403).json({ error: 'Forbidden' });
-});
+};
+app.use('/api', enforceApiAllowlist);
+if (adminUiEnabled) {
+    app.use('/admin/portal', enforceApiAllowlist);
+    app.use('/admin/portal', express.static(distDir, { index: false }));
+    app.get('/admin/portal/*', (_req, res) => {
+        res.sendFile(path.join(distDir, 'index.html'));
+    });
+}
 function serializeTestRun(run) {
     return {
         id: run.id,

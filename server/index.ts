@@ -3,8 +3,8 @@ import cors from 'cors'
 import express, {
   type NextFunction,
   type Request,
-  type Response,
   type RequestHandler,
+  type Response,
 } from 'express'
 import fs from 'fs'
 import multer, { MulterError } from 'multer'
@@ -35,6 +35,7 @@ const adminIpAllowlist = (process.env.ADMIN_IP_ALLOWLIST || '')
   .map((ip) => ip.trim())
   .filter(Boolean)
 const allowlistEnabled = adminIpAllowlist.length > 0
+const allowlistDebug = (process.env.ALLOWLIST_DEBUG || '') === '1'
 
 app.set('trust proxy', true)
 app.use(cors({ origin: corsOrigins }))
@@ -87,7 +88,7 @@ function normalizeIp(ip: string): string {
   return ip.replace('::ffff:', '').trim()
 }
 
-function extractIps(value: string | string[] | undefined): string[] {
+function extractIps(value: string | string[] | undefined | null): string[] {
   if (!value) return []
   if (Array.isArray(value)) {
     return value.flatMap((entry) =>
@@ -102,17 +103,28 @@ function getRequestIps(req: Request): string[] {
   const realIp = extractIps(req.headers['x-real-ip'])
   const cfConnectingIp = extractIps(req.headers['cf-connecting-ip'])
   const trueClientIp = extractIps(req.headers['true-client-ip'])
+  const netlifyClientIp = extractIps(req.headers['x-nf-client-connection-ip'])
   const socketIp = req.socket?.remoteAddress
     ? [normalizeIp(req.socket.remoteAddress)]
     : []
   const expressIp = req.ip ? [normalizeIp(req.ip)] : []
 
   return Array.from(
-    new Set([...forwardedFor, ...realIp, ...cfConnectingIp, ...trueClientIp, ...expressIp, ...socketIp].filter(Boolean))
+    new Set(
+      [
+        ...forwardedFor,
+        ...realIp,
+        ...cfConnectingIp,
+        ...trueClientIp,
+        ...netlifyClientIp,
+        ...expressIp,
+        ...socketIp,
+      ].filter(Boolean)
+    )
   )
 }
 
-const enforceAllowlist: RequestHandler = (req, res, next) => {
+const enforceApiAllowlist: RequestHandler = (req, res, next) => {
   if (!allowlistEnabled) {
     next()
     return
@@ -123,15 +135,30 @@ const enforceAllowlist: RequestHandler = (req, res, next) => {
     next()
     return
   }
+  if (allowlistDebug) {
+    res.status(403).json({
+      error: 'Forbidden',
+      detectedIps: ips,
+      headers: {
+        'x-nf-client-connection-ip':
+          req.headers['x-nf-client-connection-ip'],
+        'x-forwarded-for': req.headers['x-forwarded-for'],
+        'x-real-ip': req.headers['x-real-ip'],
+        'cf-connecting-ip': req.headers['cf-connecting-ip'],
+        'true-client-ip': req.headers['true-client-ip'],
+      },
+    })
+    return
+  }
   res.status(403).json({ error: 'Forbidden' })
 }
 
-app.use('/api', enforceAllowlist)
+app.use('/api', enforceApiAllowlist)
 
 if (adminUiEnabled) {
-  app.use('/admin/portal', enforceAllowlist)
+  app.use('/admin/portal', enforceApiAllowlist)
   app.use('/admin/portal', express.static(distDir, { index: false }))
-  app.get('/admin/portal/*', enforceAllowlist, (_req, res) => {
+  app.get('/admin/portal/*', (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'))
   })
 }
