@@ -11,6 +11,7 @@ import type {
 	CustomerNote,
 } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
+import { formatContractType } from '../../utils/contractType';
 
 type Tab = 'overview' | 'scope' | 'config' | 'consent' | 'reports';
 
@@ -83,7 +84,7 @@ export function CustomerDetailPage() {
 				</button>
 				<h1 className="text-2xl font-bold text-gray-900">{customer.companyName}</h1>
 				<p className="text-gray-700 mt-1">
-					{customer.contractType} • {customer.status}
+					{formatContractType(customer.contractType)} • {customer.status}
 				</p>
 			</div>
 
@@ -229,7 +230,7 @@ function OverviewTab({
 					<div className="space-y-2 text-sm">
 						<div>
 							<span className="text-gray-600">Type:</span>{' '}
-							<span className="text-gray-900 font-medium">{customer.contractType}</span>
+							<span className="text-gray-900 font-medium">{formatContractType(customer.contractType)}</span>
 						</div>
 						<div>
 							<span className="text-gray-600">Start Date:</span>{' '}

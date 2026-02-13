@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../state/adminStore';
 import type { Customer, ContractType, CustomerStatus } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
+import { contractTypeLabels, formatContractType } from '../../utils/contractType';
 import {
 	Search,
 	Plus,
@@ -24,7 +25,7 @@ export function CustomersListPage() {
 	
 	const [formData, setFormData] = useState({
 		companyName: '',
-		contractType: 'Foundation' as ContractType,
+		contractType: 'Basic' as ContractType,
 		contractStartDate: new Date().toISOString().split('T')[0],
 		contractLengthMonths: 12,
 		status: 'Active' as CustomerStatus,
@@ -47,7 +48,7 @@ export function CustomersListPage() {
 			setShowAddModal(false);
 			setFormData({
 				companyName: '',
-				contractType: 'Foundation',
+				contractType: 'Basic',
 				contractStartDate: new Date().toISOString().split('T')[0],
 				contractLengthMonths: 12,
 				status: 'Active',
@@ -140,7 +141,7 @@ export function CustomersListPage() {
 			const matchesSearch =
 				searchValue.length === 0 ||
 				customer.companyName.toLowerCase().includes(searchValue) ||
-				customer.contractType.toLowerCase().includes(searchValue) ||
+				formatContractType(customer.contractType).toLowerCase().includes(searchValue) ||
 				customer.status.toLowerCase().includes(searchValue) ||
 				customer.id.toLowerCase().includes(searchValue);
 			const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
@@ -177,7 +178,7 @@ export function CustomersListPage() {
 						setEditingCustomer(null);
 						setFormData({
 							companyName: '',
-							contractType: 'Foundation',
+							contractType: 'Basic',
 							contractStartDate: new Date().toISOString().split('T')[0],
 							contractLengthMonths: 12,
 							status: 'Active',
@@ -240,9 +241,11 @@ export function CustomersListPage() {
 							className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
 						>
 							<option value="all">All contracts</option>
-							<option value="Foundation">Foundation</option>
-							<option value="Pro">Pro</option>
-							<option value="Enterprise">Enterprise</option>
+							{Object.entries(contractTypeLabels).map(([value, label]) => (
+								<option key={value} value={value}>
+									{label}
+								</option>
+							))}
 						</select>
 						<div className="rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm">
 							{filteredCustomers.length} results
@@ -287,7 +290,7 @@ export function CustomersListPage() {
 									</div>
 								</div>
 								<div className="text-sm font-semibold text-slate-700">
-									{customer.contractType}
+									{formatContractType(customer.contractType)}
 									<div className="text-xs font-normal text-slate-500">{customer.contractLengthMonths} mo</div>
 								</div>
 								<div>
@@ -396,9 +399,11 @@ export function CustomersListPage() {
 									onChange={(e) => setFormData({ ...formData, contractType: e.target.value as ContractType })}
 									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								>
-									<option value="Foundation">Foundation</option>
-									<option value="Pro">Pro</option>
-									<option value="Enterprise">Enterprise</option>
+									{Object.entries(contractTypeLabels).map(([value, label]) => (
+										<option key={value} value={value}>
+											{label}
+										</option>
+									))}
 								</select>
 							</div>
 							<div>

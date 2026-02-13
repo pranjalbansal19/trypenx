@@ -1,6 +1,6 @@
 // Admin Portal Data Models
 
-export type ContractType = 'Foundation' | 'Pro' | 'Enterprise'
+export type ContractType = 'Basic' | 'Foundation' | 'Pro' | 'Enterprise'
 export type CustomerStatus = 'Active' | 'Paused' | 'Cancelled'
 export type ScopeType = 'ip_range' | 'domain' | 'subdomain'
 export type TestType = 'soft_scan' | 'full_pen_test'
