@@ -124,7 +124,7 @@ function getRequestIps(req: Request): string[] {
   )
 }
 
-const enforceApiAllowlist: RequestHandler = (req, res, next) => {
+const enforceAllowlist: RequestHandler = (req, res, next) => {
   if (!allowlistEnabled) {
     next()
     return
@@ -153,15 +153,7 @@ const enforceApiAllowlist: RequestHandler = (req, res, next) => {
   res.status(403).json({ error: 'Forbidden' })
 }
 
-app.use('/api', enforceApiAllowlist)
-
-if (adminUiEnabled) {
-  app.use('/admin/portal', enforceApiAllowlist)
-  app.use('/admin/portal', express.static(distDir, { index: false }))
-  app.get('/admin/portal/*', (_req, res) => {
-    res.sendFile(path.join(distDir, 'index.html'))
-  })
-}
+app.use(enforceAllowlist)
 
 function serializeTestRun(
   run: {
@@ -867,6 +859,17 @@ app.delete('/api/consents/:id', async (req, res) => {
     throw error
   }
 })
+
+if (adminUiEnabled) {
+  app.use(express.static(distDir))
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    res.sendFile(path.join(distDir, 'index.html'))
+  })
+}
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof MulterError) {

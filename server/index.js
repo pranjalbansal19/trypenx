@@ -89,7 +89,7 @@ function getRequestIps(req) {
         ...socketIp,
     ].filter(Boolean)));
 }
-const enforceApiAllowlist = (req, res, next) => {
+const enforceAllowlist = (req, res, next) => {
     if (!allowlistEnabled) {
         next();
         return;
@@ -116,14 +116,7 @@ const enforceApiAllowlist = (req, res, next) => {
     }
     res.status(403).json({ error: 'Forbidden' });
 };
-app.use('/api', enforceApiAllowlist);
-if (adminUiEnabled) {
-    app.use('/admin/portal', enforceApiAllowlist);
-    app.use('/admin/portal', express.static(distDir, { index: false }));
-    app.get('/admin/portal/*', (_req, res) => {
-        res.sendFile(path.join(distDir, 'index.html'));
-    });
-}
+app.use(enforceAllowlist);
 function serializeTestRun(run) {
     return {
         id: run.id,
@@ -696,6 +689,16 @@ app.delete('/api/consents/:id', async (req, res) => {
         throw error;
     }
 });
+if (adminUiEnabled) {
+    app.use(express.static(distDir));
+    app.get('*', (req, res) => {
+        if (req.path.startsWith('/api')) {
+            res.status(404).json({ error: 'Not found' });
+            return;
+        }
+        res.sendFile(path.join(distDir, 'index.html'));
+    });
+}
 app.use((error, _req, res, _next) => {
     if (error instanceof MulterError) {
         res.status(400).json({ error: error.message });
