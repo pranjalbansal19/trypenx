@@ -1,6 +1,13 @@
 // Admin Portal Data Models
 
 export type ContractType = 'Basic' | 'Foundation' | 'Pro' | 'Enterprise'
+export type AddOnCategory = 'recurring' | 'one_off'
+
+export interface CustomerAddOn {
+  code: string
+  label: string
+  category: AddOnCategory
+}
 export type CustomerStatus = 'Active' | 'Paused' | 'Cancelled'
 export type ScopeType = 'ip_range' | 'domain' | 'subdomain'
 export type TestType = 'soft_scan' | 'full_pen_test'
@@ -15,6 +22,7 @@ export interface Customer {
   contractStartDate: string // ISO date
   contractLengthMonths: number
   status: CustomerStatus
+  addOns?: CustomerAddOn[]
   createdAt: string
   updatedAt: string
 }

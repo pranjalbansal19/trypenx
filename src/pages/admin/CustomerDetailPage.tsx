@@ -12,6 +12,7 @@ import type {
 } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
 import { formatContractType } from '../../utils/contractType';
+import { addOnCategoryLabels, groupAddOns, normalizeAddOns } from '../../utils/addOns';
 
 type Tab = 'overview' | 'scope' | 'config' | 'consent' | 'reports';
 
@@ -206,6 +207,8 @@ function OverviewTab({
 }) {
 	const [newNote, setNewNote] = useState('');
 	const [adding, setAdding] = useState(false);
+	const addOns = normalizeAddOns(customer?.addOns);
+	const groupedAddOns = groupAddOns(addOns);
 
 	const handleAddNote = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -255,6 +258,44 @@ function OverviewTab({
 							>
 								{customer.status}
 							</span>
+						</div>
+						<div className="pt-2 border-t border-gray-200">
+							<div className="text-xs uppercase tracking-[0.2em] text-gray-500">
+								Add-ons
+							</div>
+							<div className="mt-2 space-y-3">
+								{(['recurring', 'one_off'] as const).map((category) => {
+									const items = groupedAddOns[category];
+									return (
+										<div key={category}>
+											<div className="text-xs font-semibold text-gray-600">
+												{addOnCategoryLabels[category]}
+											</div>
+											{items.length === 0 ? (
+												<div className="text-xs text-gray-400 mt-1">None selected</div>
+											) : (
+												<div className="mt-2 flex flex-wrap gap-2">
+													{items.map((addOn) => (
+														<span
+															key={addOn.code}
+															className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+																category === 'recurring'
+																	? 'bg-blue-100 text-blue-800'
+																	: 'bg-purple-100 text-purple-800'
+															}`}
+														>
+															{addOn.label}
+															<span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] uppercase tracking-wide">
+																{category === 'recurring' ? 'Recurring' : 'One-off'}
+															</span>
+														</span>
+													))}
+												</div>
+											)}
+										</div>
+									);
+								})}
+							</div>
 						</div>
 					</div>
 				</div>

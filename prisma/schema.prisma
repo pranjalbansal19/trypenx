@@ -58,6 +58,7 @@ model Customer {
   contractStartDate    DateTime
   contractLengthMonths Int
   status               CustomerStatus
+  addOns               Json?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 

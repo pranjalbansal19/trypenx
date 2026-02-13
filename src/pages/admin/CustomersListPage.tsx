@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../state/adminStore';
-import type { Customer, ContractType, CustomerStatus } from '../../types/admin';
+import type { Customer, ContractType, CustomerStatus, CustomerAddOn } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
 import { contractTypeLabels, formatContractType } from '../../utils/contractType';
+import { addOnCatalog, addOnCategoryLabels, normalizeAddOns } from '../../utils/addOns';
 import {
 	Search,
 	Plus,
@@ -29,6 +30,7 @@ export function CustomersListPage() {
 		contractStartDate: new Date().toISOString().split('T')[0],
 		contractLengthMonths: 12,
 		status: 'Active' as CustomerStatus,
+		addOns: [] as CustomerAddOn[],
 	});
 
 	useEffect(() => {
@@ -52,6 +54,7 @@ export function CustomersListPage() {
 				contractStartDate: new Date().toISOString().split('T')[0],
 				contractLengthMonths: 12,
 				status: 'Active',
+				addOns: [],
 			});
 			loadCustomers();
 		} catch (error) {
@@ -67,6 +70,7 @@ export function CustomersListPage() {
 			contractStartDate: customer.contractStartDate.split('T')[0],
 			contractLengthMonths: customer.contractLengthMonths,
 			status: customer.status,
+			addOns: normalizeAddOns(customer.addOns),
 		});
 		setShowAddModal(true);
 	};
@@ -182,6 +186,7 @@ export function CustomersListPage() {
 							contractStartDate: new Date().toISOString().split('T')[0],
 							contractLengthMonths: 12,
 							status: 'Active',
+							addOns: [],
 						});
 						setShowAddModal(true);
 					}}
@@ -426,6 +431,50 @@ export function CustomersListPage() {
 									onChange={(e) => setFormData({ ...formData, contractLengthMonths: parseInt(e.target.value) })}
 									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
+							</div>
+							<div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+								<div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Add-ons</div>
+								<div className="mt-4 grid gap-4 sm:grid-cols-2">
+									{(['recurring', 'one_off'] as const).map((category) => {
+										const addOnsByCategory = addOnCatalog.filter((addOn) => addOn.category === category);
+										return (
+											<div key={category} className="space-y-2">
+												<div className="text-sm font-semibold text-slate-700">
+													{addOnCategoryLabels[category]}
+												</div>
+												<div className="flex flex-wrap gap-2">
+													{addOnsByCategory.map((addOn) => {
+														const selected = formData.addOns.some((item) => item.code === addOn.code);
+														return (
+															<button
+																type="button"
+																key={addOn.code}
+																onClick={() => {
+																	setFormData((prev) => {
+																		const exists = prev.addOns.some((item) => item.code === addOn.code);
+																		return {
+																			...prev,
+																			addOns: exists
+																				? prev.addOns.filter((item) => item.code !== addOn.code)
+																				: [...prev.addOns, addOn],
+																		};
+																	});
+																}}
+																className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+																	selected
+																		? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+																		: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+																}`}
+															>
+																{addOn.label}
+															</button>
+														);
+													})}
+												</div>
+											</div>
+										);
+									})}
+								</div>
 							</div>
 							<div>
 								<label className="block text-sm font-medium mb-1 text-slate-700">Status</label>

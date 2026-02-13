@@ -73,6 +73,31 @@ function parseDateOnly(value?: string | null): Date | null {
   return new Date(`${value}T00:00:00.000Z`)
 }
 
+function normalizeAddOnsInput(
+  value: unknown
+): Prisma.InputJsonValue | Prisma.NullTypes.DbNull | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return Prisma.DbNull
+  if (!Array.isArray(value)) return undefined
+
+  const sanitized = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const record = entry as Record<string, unknown>
+      const code = typeof record.code === 'string' ? record.code.trim() : ''
+      const label = typeof record.label === 'string' ? record.label.trim() : ''
+      const category =
+        record.category === 'recurring' || record.category === 'one_off'
+          ? record.category
+          : null
+      if (!code || !label || !category) return null
+      return { code, label, category }
+    })
+    .filter(Boolean)
+
+  return sanitized
+}
+
 function isNotFoundError(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -381,6 +406,7 @@ app.post('/api/customers', async (req, res) => {
     contractStartDate,
     contractLengthMonths,
     status,
+    addOns,
   } = req.body as Record<string, unknown>
 
   if (
@@ -394,6 +420,8 @@ app.post('/api/customers', async (req, res) => {
     return
   }
 
+  const normalizedAddOns = normalizeAddOnsInput(addOns)
+
   const created = await prisma.customer.create({
     data: {
       companyName: String(companyName),
@@ -401,6 +429,7 @@ app.post('/api/customers', async (req, res) => {
       contractStartDate: parseDateOnly(String(contractStartDate))!,
       contractLengthMonths: Number(contractLengthMonths),
       status: status as CustomerStatus,
+      ...(normalizedAddOns !== undefined ? { addOns: normalizedAddOns } : {}),
     },
   })
   res.status(201).json({
@@ -418,6 +447,7 @@ app.put('/api/customers/:id', async (req, res) => {
     contractStartDate,
     contractLengthMonths,
     status,
+    addOns,
   } = req.body as Record<string, unknown>
   const data: Prisma.CustomerUpdateInput = {}
 
@@ -434,6 +464,11 @@ app.put('/api/customers/:id', async (req, res) => {
       data.contractLengthMonths = Number(contractLengthMonths)
     if (status !== undefined)
       data.status = status as CustomerStatus
+
+  const normalizedAddOns = normalizeAddOnsInput(addOns)
+  if (normalizedAddOns !== undefined) {
+    data.addOns = normalizedAddOns
+  }
 
   try {
     const updated = await prisma.customer.update({
