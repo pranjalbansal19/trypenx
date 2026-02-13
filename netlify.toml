@@ -15,6 +15,10 @@
   to = "/index.html"
   status = 200
 
+[[edge_functions]]
+  path = "/*"
+  function = "ip-allowlist"
+
 [build]
   publish = "dist"
   command = "npm run build"
