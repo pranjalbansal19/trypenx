@@ -1,6 +1,6 @@
 // Admin Portal Data Models
 
-export type ContractType = 'Basic' | 'Foundation' | 'Pro' | 'Enterprise'
+export type ContractType = 'Basic' | 'BasicPlus' | 'Foundation' | 'Pro' | 'Enterprise'
 export type AddOnCategory = 'recurring' | 'one_off'
 
 export interface CustomerAddOn {

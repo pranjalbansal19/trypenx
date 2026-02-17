@@ -1,7 +1,8 @@
 import { PropsWithChildren } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ToastContainer } from '../ToastContainer';
 import cybersentryLogo from '../../assets/cybersentry.png';
+import { useAdminAuthStore } from '../../state/adminAuthStore';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
@@ -9,6 +10,11 @@ import '@fontsource/inter/700.css';
 
 export function AdminPortalLayout({ children }: PropsWithChildren) {
 	const location = useLocation();
+	const navigate = useNavigate();
+	const { user, logout } = useAdminAuthStore((s) => ({
+		user: s.user,
+		logout: s.logout,
+	}));
 	
 	const isActive = (path: string) => {
 		return location.pathname.startsWith(path);
@@ -33,7 +39,35 @@ export function AdminPortalLayout({ children }: PropsWithChildren) {
 								<h1 className="text-2xl font-semibold text-slate-900">Admin Control Center</h1>
 							</div>
 							<div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 shadow-sm">
-								<span className="font-semibold text-slate-800">Secure Ops</span> • Live customer management
+								<div className="flex flex-wrap items-center gap-3">
+									<span className="font-semibold text-slate-800">Secure Ops</span>
+									<span className="text-slate-400">•</span>
+									<span>Live customer management</span>
+									{user && (
+										<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+											{user.role}
+										</span>
+									)}
+									{user?.role === 'SuperAdmin' && (
+										<button
+											onClick={() => navigate('/admin/portal/users')}
+											className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+										>
+											Users
+										</button>
+									)}
+									{user && (
+										<button
+											onClick={async () => {
+												await logout();
+												navigate('/admin/portal/login', { replace: true });
+											}}
+											className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+										>
+											Sign out
+										</button>
+									)}
+								</div>
 							</div>
 						</div>
 					</div>
@@ -63,6 +97,18 @@ export function AdminPortalLayout({ children }: PropsWithChildren) {
 							>
 								Reports Inbox
 							</Link>
+							{user?.role === 'SuperAdmin' && (
+								<Link
+									to="/admin/portal/users"
+									className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+										isActive('/admin/portal/users')
+											? 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 text-white shadow-md shadow-slate-900/20'
+											: 'text-slate-600 hover:bg-slate-900/5 hover:text-slate-900'
+									}`}
+								>
+									Admin Users
+								</Link>
+							)}
 						</div>
 					</div>
 				</nav>

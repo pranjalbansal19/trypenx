@@ -3,7 +3,10 @@ import cors from 'cors';
 import express from 'express';
 import fs from 'fs';
 import multer, { MulterError } from 'multer';
-import { Prisma, PrismaClient, } from '@prisma/client';
+import { authenticator } from 'otplib';
+import bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'crypto';
+import { AdminRole, AdminSessionStatus, Prisma, PrismaClient, } from '@prisma/client';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const app = express();
@@ -19,8 +22,18 @@ const adminIpAllowlist = (process.env.ADMIN_IP_ALLOWLIST || '')
     .filter(Boolean);
 const allowlistEnabled = adminIpAllowlist.length > 0;
 const allowlistDebug = (process.env.ALLOWLIST_DEBUG || '') === '1';
+const sessionTtlHours = Number(process.env.ADMIN_SESSION_TTL_HOURS || 1);
+const maxLoginAttempts = Number(process.env.ADMIN_MAX_LOGIN_ATTEMPTS || 5);
+const lockMinutes = Number(process.env.ADMIN_LOCK_MINUTES || 15);
+const maxIpAttempts = Number(process.env.ADMIN_MAX_IP_ATTEMPTS || 20);
+const ipWindowMinutes = Number(process.env.ADMIN_IP_WINDOW_MINUTES || 10);
+authenticator.options = { window: 1 };
+const ipAttemptTracker = new Map();
 app.set('trust proxy', true);
-app.use(cors({ origin: corsOrigins }));
+app.use(cors({
+    origin: corsOrigins,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json({ limit: '2mb' }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,6 +63,72 @@ function parseDateOnly(value) {
     if (!value)
         return null;
     return new Date(`${value}T00:00:00.000Z`);
+}
+function serializeAdminUser(user) {
+    return {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        role: user.role,
+        totpEnabled: user.totpEnabled,
+        isActive: user.isActive,
+        lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+        createdAt: user.createdAt.toISOString(),
+    };
+}
+function hashSessionToken(token) {
+    return createHash('sha256').update(token).digest('hex');
+}
+function nowPlusHours(hours) {
+    return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+function readBearerToken(req) {
+    const header = req.headers.authorization || '';
+    if (!header.startsWith('Bearer '))
+        return null;
+    return header.slice('Bearer '.length).trim() || null;
+}
+function recordIpAttempt(ip) {
+    const now = Date.now();
+    const windowMs = ipWindowMinutes * 60 * 1000;
+    const entry = ipAttemptTracker.get(ip);
+    if (!entry || entry.resetAt < now) {
+        ipAttemptTracker.set(ip, { count: 1, resetAt: now + windowMs });
+        return { limited: false, remaining: maxIpAttempts - 1 };
+    }
+    entry.count += 1;
+    if (entry.count > maxIpAttempts) {
+        return { limited: true, remaining: 0 };
+    }
+    return { limited: false, remaining: maxIpAttempts - entry.count };
+}
+async function logAdminAudit(params) {
+    await prisma.adminAuditLog.create({
+        data: {
+            userId: params.userId ?? null,
+            email: params.email ?? null,
+            action: params.action,
+            success: params.success,
+            ipAddress: params.ipAddress ?? null,
+            userAgent: params.userAgent ?? null,
+            metadata: params.metadata ?? undefined,
+        },
+    });
+}
+async function createAdminSession(params) {
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = hashSessionToken(token);
+    const session = await prisma.adminSession.create({
+        data: {
+            userId: params.userId,
+            tokenHash,
+            status: params.status,
+            ipAddress: params.ipAddress ?? null,
+            userAgent: params.userAgent ?? null,
+            expiresAt: nowPlusHours(sessionTtlHours),
+        },
+    });
+    return { token, session };
 }
 function normalizeAddOnsInput(value) {
     if (value === undefined)
@@ -112,6 +191,46 @@ function getRequestIps(req) {
         ...expressIp,
         ...socketIp,
     ].filter(Boolean)));
+}
+async function requireAdminAuth(req, res, next) {
+    if (req.method === 'OPTIONS') {
+        next();
+        return;
+    }
+    const token = readBearerToken(req);
+    if (!token) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+    const tokenHash = hashSessionToken(token);
+    const session = await prisma.adminSession.findUnique({
+        where: { tokenHash },
+        include: { user: true },
+    });
+    if (!session || session.status !== AdminSessionStatus.Active) {
+        res.status(401).json({ error: 'Session expired or invalid' });
+        return;
+    }
+    if (session.expiresAt.getTime() < Date.now()) {
+        await prisma.adminSession.update({
+            where: { id: session.id },
+            data: { status: AdminSessionStatus.Revoked },
+        });
+        res.status(401).json({ error: 'Session expired' });
+        return;
+    }
+    if (!session.user.isActive) {
+        res.status(403).json({ error: 'User account disabled' });
+        return;
+    }
+    await prisma.adminSession.update({
+        where: { id: session.id },
+        data: { lastUsedAt: new Date() },
+    });
+    req.adminUser = serializeAdminUser(session.user);
+    req.adminSessionId = session.id;
+    req.adminSessionExpiresAt = session.expiresAt;
+    next();
 }
 function renderForbiddenPage(options) {
     const { title, message, debug } = options;
@@ -277,6 +396,27 @@ const enforceAllowlist = (req, res, next) => {
     }));
 };
 app.use(enforceAllowlist);
+const adminAuthOpenPaths = new Set([
+    '/api/health',
+    '/api/admin/login',
+    '/api/admin/bootstrap',
+    '/api/admin/2fa/verify',
+]);
+app.use(async (req, res, next) => {
+    if (!req.path.startsWith('/api')) {
+        next();
+        return;
+    }
+    if (req.method === 'OPTIONS') {
+        next();
+        return;
+    }
+    if (adminAuthOpenPaths.has(req.path)) {
+        next();
+        return;
+    }
+    await requireAdminAuth(req, res, next);
+});
 function serializeTestRun(run) {
     return {
         id: run.id,
@@ -294,6 +434,374 @@ function serializeTestRun(run) {
 }
 app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
+});
+// Admin authentication
+app.post('/api/admin/bootstrap', async (req, res) => {
+    const { email, password, name, role } = req.body;
+    if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+    }
+    const existingCount = await prisma.adminUser.count();
+    if (existingCount > 0) {
+        res.status(403).json({ error: 'Bootstrap already completed' });
+        return;
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const hashed = await bcrypt.hash(String(password), 12);
+    const created = await prisma.adminUser.create({
+        data: {
+            email: normalizedEmail,
+            name: name ? String(name) : null,
+            role: role || AdminRole.SuperAdmin,
+            passwordHash: hashed,
+            totpEnabled: false,
+        },
+    });
+    await logAdminAudit({
+        userId: created.id,
+        email: created.email,
+        action: 'bootstrap',
+        success: true,
+        ipAddress: getRequestIps(req)[0] || null,
+        userAgent: req.headers['user-agent'] || null,
+    });
+    res.status(201).json({ user: serializeAdminUser(created) });
+});
+app.post('/api/admin/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+    }
+    const ip = getRequestIps(req)[0] || null;
+    if (ip) {
+        const ipState = recordIpAttempt(ip);
+        if (ipState.limited) {
+            await logAdminAudit({
+                email: String(email).trim().toLowerCase(),
+                action: 'login_rate_limited',
+                success: false,
+                ipAddress: ip,
+                userAgent: req.headers['user-agent'] || null,
+            });
+            res.status(429).json({ error: 'Too many login attempts' });
+            return;
+        }
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await prisma.adminUser.findUnique({
+        where: { email: normalizedEmail },
+    });
+    if (!user) {
+        await logAdminAudit({
+            email: normalizedEmail,
+            action: 'login_failed',
+            success: false,
+            ipAddress: ip,
+            userAgent: req.headers['user-agent'] || null,
+        });
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+    }
+    if (!user.isActive) {
+        await logAdminAudit({
+            userId: user.id,
+            email: user.email,
+            action: 'login_blocked',
+            success: false,
+            ipAddress: ip,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { reason: 'disabled' },
+        });
+        res.status(403).json({ error: 'Account disabled' });
+        return;
+    }
+    if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
+        await logAdminAudit({
+            userId: user.id,
+            email: user.email,
+            action: 'login_locked',
+            success: false,
+            ipAddress: ip,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { lockUntil: user.lockUntil.toISOString() },
+        });
+        res.status(429).json({ error: 'Account temporarily locked' });
+        return;
+    }
+    const passwordValid = await bcrypt.compare(String(password), user.passwordHash);
+    if (!passwordValid) {
+        const failedCount = user.failedLoginCount + 1;
+        const shouldLock = failedCount >= maxLoginAttempts;
+        const lockUntil = shouldLock
+            ? new Date(Date.now() + lockMinutes * 60 * 1000)
+            : null;
+        await prisma.adminUser.update({
+            where: { id: user.id },
+            data: {
+                failedLoginCount: failedCount,
+                lockUntil,
+            },
+        });
+        await logAdminAudit({
+            userId: user.id,
+            email: user.email,
+            action: 'login_failed',
+            success: false,
+            ipAddress: ip,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: {
+                failedCount,
+                locked: shouldLock,
+            },
+        });
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+    }
+    if (user.failedLoginCount > 0 || user.lockUntil) {
+        await prisma.adminUser.update({
+            where: { id: user.id },
+            data: { failedLoginCount: 0, lockUntil: null },
+        });
+    }
+    let totpSecret = user.totpSecret;
+    const needsSetup = !user.totpEnabled || !totpSecret;
+    if (!totpSecret) {
+        totpSecret = authenticator.generateSecret();
+        await prisma.adminUser.update({
+            where: { id: user.id },
+            data: { totpSecret },
+        });
+    }
+    const { token, session } = await createAdminSession({
+        userId: user.id,
+        status: AdminSessionStatus.Pending2FA,
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'] || null,
+    });
+    await logAdminAudit({
+        userId: user.id,
+        email: user.email,
+        action: needsSetup ? 'login_2fa_setup_required' : 'login_2fa_required',
+        success: true,
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'] || null,
+    });
+    if (needsSetup) {
+        const otpauthUrl = authenticator.keyuri(user.email, 'Cybersentry Admin', totpSecret);
+        res.json({
+            status: '2fa_setup',
+            sessionToken: token,
+            sessionExpiresAt: session.expiresAt.toISOString(),
+            otpauthUrl,
+            secret: totpSecret,
+            user: serializeAdminUser(user),
+        });
+        return;
+    }
+    res.json({
+        status: '2fa_required',
+        sessionToken: token,
+        sessionExpiresAt: session.expiresAt.toISOString(),
+        user: serializeAdminUser(user),
+    });
+});
+app.post('/api/admin/2fa/verify', async (req, res) => {
+    const { code } = req.body;
+    const token = readBearerToken(req);
+    if (!token || !code) {
+        res.status(400).json({ error: 'Verification code required' });
+        return;
+    }
+    const tokenHash = hashSessionToken(token);
+    const session = await prisma.adminSession.findUnique({
+        where: { tokenHash },
+        include: { user: true },
+    });
+    if (!session || session.status !== AdminSessionStatus.Pending2FA) {
+        res.status(401).json({ error: 'Invalid session' });
+        return;
+    }
+    if (session.expiresAt.getTime() < Date.now()) {
+        await prisma.adminSession.update({
+            where: { id: session.id },
+            data: { status: AdminSessionStatus.Revoked },
+        });
+        res.status(401).json({ error: 'Session expired' });
+        return;
+    }
+    const ip = getRequestIps(req)[0] || null;
+    const user = session.user;
+    if (!user.totpSecret) {
+        res.status(400).json({ error: '2FA is not configured' });
+        return;
+    }
+    const valid = authenticator.check(String(code).replace(/\s+/g, ''), user.totpSecret);
+    if (!valid) {
+        await logAdminAudit({
+            userId: user.id,
+            email: user.email,
+            action: '2fa_failed',
+            success: false,
+            ipAddress: ip,
+            userAgent: req.headers['user-agent'] || null,
+        });
+        res.status(401).json({ error: 'Invalid verification code' });
+        return;
+    }
+    const updatedUser = await prisma.adminUser.update({
+        where: { id: user.id },
+        data: {
+            totpEnabled: true,
+            lastLoginAt: new Date(),
+            failedLoginCount: 0,
+            lockUntil: null,
+        },
+    });
+    await prisma.adminSession.update({
+        where: { id: session.id },
+        data: { status: AdminSessionStatus.Active, lastUsedAt: new Date() },
+    });
+    await logAdminAudit({
+        userId: user.id,
+        email: user.email,
+        action: '2fa_verified',
+        success: true,
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'] || null,
+    });
+    res.json({
+        status: 'authenticated',
+        sessionToken: token,
+        sessionExpiresAt: session.expiresAt.toISOString(),
+        user: serializeAdminUser(updatedUser),
+    });
+});
+app.get('/api/admin/me', async (req, res) => {
+    const authedReq = req;
+    if (!authedReq.adminUser) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+    }
+    res.json({
+        user: authedReq.adminUser,
+        sessionExpiresAt: authedReq.adminSessionExpiresAt
+            ? authedReq.adminSessionExpiresAt.toISOString()
+            : null,
+    });
+});
+app.post('/api/admin/logout', async (req, res) => {
+    const authedReq = req;
+    if (authedReq.adminSessionId) {
+        await prisma.adminSession.update({
+            where: { id: authedReq.adminSessionId },
+            data: { status: AdminSessionStatus.Revoked },
+        });
+    }
+    res.status(204).send();
+});
+app.post('/api/admin/users', async (req, res) => {
+    const authedReq = req;
+    if (!authedReq.adminUser || authedReq.adminUser.role !== AdminRole.SuperAdmin) {
+        res.status(403).json({ error: 'Insufficient permissions' });
+        return;
+    }
+    const { email, password, name, role } = req.body;
+    if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const hashed = await bcrypt.hash(String(password), 12);
+    try {
+        const created = await prisma.adminUser.create({
+            data: {
+                email: normalizedEmail,
+                name: name ? String(name) : null,
+                role: role || AdminRole.SD,
+                passwordHash: hashed,
+                totpEnabled: false,
+            },
+        });
+        await logAdminAudit({
+            userId: authedReq.adminUser.id,
+            email: authedReq.adminUser.email,
+            action: 'create_admin_user',
+            success: true,
+            ipAddress: getRequestIps(req)[0] || null,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { createdUserId: created.id, role: created.role },
+        });
+        res.status(201).json({ user: serializeAdminUser(created) });
+    }
+    catch (error) {
+        await logAdminAudit({
+            userId: authedReq.adminUser.id,
+            email: authedReq.adminUser.email,
+            action: 'create_admin_user',
+            success: false,
+            ipAddress: getRequestIps(req)[0] || null,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { reason: 'email_in_use' },
+        });
+        res.status(409).json({ error: 'User already exists' });
+    }
+});
+app.get('/api/admin/users', async (req, res) => {
+    const authedReq = req;
+    if (!authedReq.adminUser || authedReq.adminUser.role !== AdminRole.SuperAdmin) {
+        res.status(403).json({ error: 'Insufficient permissions' });
+        return;
+    }
+    const users = await prisma.adminUser.findMany({
+        orderBy: { createdAt: 'desc' },
+    });
+    res.json({
+        users: users.map((user) => serializeAdminUser(user)),
+    });
+});
+app.delete('/api/admin/users/:id', async (req, res) => {
+    const authedReq = req;
+    if (!authedReq.adminUser || authedReq.adminUser.role !== AdminRole.SuperAdmin) {
+        res.status(403).json({ error: 'Insufficient permissions' });
+        return;
+    }
+    if (req.params.id === authedReq.adminUser.id) {
+        res.status(400).json({ error: 'You cannot delete your own account.' });
+        return;
+    }
+    try {
+        const deleted = await prisma.adminUser.delete({
+            where: { id: req.params.id },
+        });
+        await logAdminAudit({
+            userId: authedReq.adminUser.id,
+            email: authedReq.adminUser.email,
+            action: 'delete_admin_user',
+            success: true,
+            ipAddress: getRequestIps(req)[0] || null,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { deletedUserId: deleted.id, deletedEmail: deleted.email },
+        });
+        res.status(204).send();
+    }
+    catch (error) {
+        if (isNotFoundError(error)) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        await logAdminAudit({
+            userId: authedReq.adminUser.id,
+            email: authedReq.adminUser.email,
+            action: 'delete_admin_user',
+            success: false,
+            ipAddress: getRequestIps(req)[0] || null,
+            userAgent: req.headers['user-agent'] || null,
+            metadata: { deletedUserId: req.params.id },
+        });
+        throw error;
+    }
 });
 // Customers
 app.get('/api/customers', async (_req, res) => {

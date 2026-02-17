@@ -7,11 +7,18 @@ import type {
   TestRun,
   Report,
 } from '../types/admin'
+import { getAdminToken } from '../utils/adminAuth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, options)
+  const headers = new Headers(options.headers || {})
+  const token = getAdminToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(path, { ...options, headers })
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`
     try {

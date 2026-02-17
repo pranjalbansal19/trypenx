@@ -9,6 +9,7 @@ datasource db {
 
 enum ContractType {
   Basic
+  BasicPlus
   Foundation
   Pro
   Enterprise
@@ -49,6 +50,18 @@ enum ReportStatus {
   New
   Reviewed
   Sent
+}
+
+enum AdminRole {
+  SuperAdmin
+  SD
+  ITMS
+}
+
+enum AdminSessionStatus {
+  Pending2FA
+  Active
+  Revoked
 }
 
 model Customer {
@@ -171,4 +184,57 @@ model Report {
   run      TestRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
+}
+
+model AdminUser {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String?
+  role             AdminRole
+  passwordHash     String
+  totpSecret       String?
+  totpEnabled      Boolean  @default(false)
+  failedLoginCount Int      @default(0)
+  lockUntil        DateTime?
+  lastLoginAt      DateTime?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sessions   AdminSession[]
+  auditLogs  AdminAuditLog[]
+}
+
+model AdminSession {
+  id          String             @id @default(cuid())
+  userId      String
+  tokenHash   String             @unique
+  status      AdminSessionStatus @default(Pending2FA)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime           @default(now())
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String?
+  action    String
+  ipAddress String?
+  userAgent String?
+  success   Boolean
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user AdminUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
 }

@@ -428,7 +428,13 @@ export function CustomersListPage() {
 									required
 									min="1"
 									value={formData.contractLengthMonths}
-									onChange={(e) => setFormData({ ...formData, contractLengthMonths: parseInt(e.target.value) })}
+									onChange={(e) => {
+										const next = Number(e.target.value);
+										setFormData({
+											...formData,
+											contractLengthMonths: Number.isNaN(next) ? 1 : next,
+										});
+									}}
 									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
 							</div>
