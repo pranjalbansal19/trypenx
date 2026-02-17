@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../state/adminStore';
-import type { Customer, ContractType, CustomerStatus, CustomerAddOn } from '../../types/admin';
+import type { Customer, ContractType, CustomerStatus, CustomerType, CustomerAddOn } from '../../types/admin';
 import * as adminApi from '../../services/adminApi';
 import { contractTypeLabels, formatContractType } from '../../utils/contractType';
 import { addOnCatalog, addOnCategoryLabels, normalizeAddOns } from '../../utils/addOns';
@@ -23,9 +23,11 @@ export function CustomersListPage() {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [statusFilter, setStatusFilter] = useState<'all' | CustomerStatus>('all');
 	const [contractFilter, setContractFilter] = useState<'all' | ContractType>('all');
+	const [customerTypeFilter, setCustomerTypeFilter] = useState<'all' | CustomerType>('all');
 	
 	const [formData, setFormData] = useState({
 		companyName: '',
+		customerType: 'Direct' as CustomerType,
 		contractType: 'Basic' as ContractType,
 		contractStartDate: new Date().toISOString().split('T')[0],
 		contractLengthMonths: 12,
@@ -50,6 +52,7 @@ export function CustomersListPage() {
 			setShowAddModal(false);
 			setFormData({
 				companyName: '',
+				customerType: 'Direct',
 				contractType: 'Basic',
 				contractStartDate: new Date().toISOString().split('T')[0],
 				contractLengthMonths: 12,
@@ -66,6 +69,7 @@ export function CustomersListPage() {
 		setEditingCustomer(customer);
 		setFormData({
 			companyName: customer.companyName,
+			customerType: customer.customerType ?? 'Direct',
 			contractType: customer.contractType,
 			contractStartDate: customer.contractStartDate.split('T')[0],
 			contractLengthMonths: customer.contractLengthMonths,
@@ -147,12 +151,14 @@ export function CustomersListPage() {
 				customer.companyName.toLowerCase().includes(searchValue) ||
 				formatContractType(customer.contractType).toLowerCase().includes(searchValue) ||
 				customer.status.toLowerCase().includes(searchValue) ||
+				(customer.customerType ?? 'Direct').toLowerCase().includes(searchValue) ||
 				customer.id.toLowerCase().includes(searchValue);
 			const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
 			const matchesContract = contractFilter === 'all' || customer.contractType === contractFilter;
-			return matchesSearch && matchesStatus && matchesContract;
+			const matchesCustomerType = customerTypeFilter === 'all' || (customer.customerType ?? 'Direct') === customerTypeFilter;
+			return matchesSearch && matchesStatus && matchesContract && matchesCustomerType;
 		});
-	}, [customers, searchTerm, statusFilter, contractFilter]);
+	}, [customers, searchTerm, statusFilter, contractFilter, customerTypeFilter]);
 
 	if (loading && customers.length === 0) {
 		return (
@@ -182,6 +188,7 @@ export function CustomersListPage() {
 						setEditingCustomer(null);
 						setFormData({
 							companyName: '',
+							customerType: 'Direct',
 							contractType: 'Basic',
 							contractStartDate: new Date().toISOString().split('T')[0],
 							contractLengthMonths: 12,
@@ -252,6 +259,15 @@ export function CustomersListPage() {
 								</option>
 							))}
 						</select>
+						<select
+							value={customerTypeFilter}
+							onChange={(e) => setCustomerTypeFilter(e.target.value as 'all' | CustomerType)}
+							className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+						>
+							<option value="all">All types</option>
+							<option value="Direct">Direct</option>
+							<option value="ITMS">ITMS</option>
+						</select>
 						<div className="rounded-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm">
 							{filteredCustomers.length} results
 						</div>
@@ -290,7 +306,12 @@ export function CustomersListPage() {
 										{customer.companyName.slice(0, 2).toUpperCase()}
 									</div>
 									<div>
-										<div className="text-base font-semibold text-slate-900">{customer.companyName}</div>
+										<div className="flex items-center gap-2 flex-wrap">
+											<span className="text-base font-semibold text-slate-900">{customer.companyName}</span>
+											<span className={`rounded-full px-2 py-0.5 text-xs font-medium ${(customer.customerType ?? 'Direct') === 'ITMS' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+												{(customer.customerType ?? 'Direct') === 'ITMS' ? 'ITMS' : 'Direct'}
+											</span>
+										</div>
 										<div className="text-xs text-slate-500">ID · {customer.id}</div>
 									</div>
 								</div>
@@ -396,6 +417,18 @@ export function CustomersListPage() {
 									onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
 									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
 								/>
+							</div>
+							<div>
+								<label className="block text-sm font-medium mb-1 text-slate-700">Customer Type</label>
+								<select
+									value={formData.customerType}
+									onChange={(e) => setFormData({ ...formData, customerType: e.target.value as CustomerType })}
+									className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
+								>
+									<option value="Direct">Onecom Direct</option>
+									<option value="ITMS">Onecom ITMS (IT Managed Services)</option>
+								</select>
+								<p className="mt-1 text-xs text-slate-500">ITMS: reports can be tailored to avoid exposing Onecom-side vulnerabilities.</p>
 							</div>
 							<div>
 								<label className="block text-sm font-medium mb-1 text-slate-700">Contract Type</label>

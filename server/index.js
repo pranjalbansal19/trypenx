@@ -6,7 +6,7 @@ import multer, { MulterError } from 'multer';
 import { authenticator } from 'otplib';
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
-import { AdminRole, AdminSessionStatus, Prisma, PrismaClient, } from '@prisma/client';
+import { AdminRole, AdminSessionStatus, CustomerType, Prisma, PrismaClient, } from '@prisma/client';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const app = express();
@@ -831,7 +831,7 @@ app.get('/api/customers/:id', async (req, res) => {
     });
 });
 app.post('/api/customers', async (req, res) => {
-    const { companyName, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
+    const { companyName, customerType, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
     if (!companyName ||
         !contractType ||
         !contractStartDate ||
@@ -841,9 +841,11 @@ app.post('/api/customers', async (req, res) => {
         return;
     }
     const normalizedAddOns = normalizeAddOnsInput(addOns);
+    const resolvedCustomerType = customerType === 'ITMS' ? CustomerType.ITMS : CustomerType.Direct;
     const created = await prisma.customer.create({
         data: {
             companyName: String(companyName),
+            customerType: resolvedCustomerType,
             contractType: contractType,
             contractStartDate: parseDateOnly(String(contractStartDate)),
             contractLengthMonths: Number(contractLengthMonths),
@@ -859,13 +861,15 @@ app.post('/api/customers', async (req, res) => {
     });
 });
 app.put('/api/customers/:id', async (req, res) => {
-    const { companyName, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
+    const { companyName, customerType, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
     const data = {};
     if (companyName !== undefined)
         data.companyName = String(companyName);
+    if (customerType !== undefined)
+        data.customerType =
+            customerType === 'ITMS' ? CustomerType.ITMS : CustomerType.Direct;
     if (contractType !== undefined)
-        if (contractType !== undefined)
-            data.contractType = contractType;
+        data.contractType = contractType;
     if (contractStartDate !== undefined) {
         const parsedDate = parseDateOnly(String(contractStartDate));
         if (parsedDate !== null)
@@ -1188,6 +1192,8 @@ app.put('/api/test-runs/:id', async (req, res) => {
     }
 });
 // Reports
+// When customer is ITMS (IT Managed Services), report generation/export may need to filter or
+// redact Onecom-side vulnerabilities so reports do not expose Onecom infrastructure to the end customer.
 app.get('/api/customers/:id/reports', async (req, res) => {
     const reports = await prisma.report.findMany({
         where: { customerId: req.params.id },

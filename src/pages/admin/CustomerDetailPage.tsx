@@ -83,7 +83,12 @@ export function CustomerDetailPage() {
 				>
 					← Back to Customers
 				</button>
-				<h1 className="text-2xl font-bold text-gray-900">{customer.companyName}</h1>
+				<div className="flex items-center gap-2 flex-wrap">
+					<h1 className="text-2xl font-bold text-gray-900">{customer.companyName}</h1>
+					<span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${(customer.customerType ?? 'Direct') === 'ITMS' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'}`}>
+						{(customer.customerType ?? 'Direct') === 'ITMS' ? 'ITMS' : 'Direct'}
+					</span>
+				</div>
 				<p className="text-gray-700 mt-1">
 					{formatContractType(customer.contractType)} • {customer.status}
 				</p>

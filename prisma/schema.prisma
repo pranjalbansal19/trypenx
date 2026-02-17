@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum ContractType {
@@ -19,6 +20,11 @@ enum CustomerStatus {
   Active
   Paused
   Cancelled
+}
+
+enum CustomerType {
+  Direct
+  ITMS
 }
 
 enum ScopeType {
@@ -67,6 +73,7 @@ enum AdminSessionStatus {
 model Customer {
   id                   String             @id @default(cuid())
   companyName          String
+  customerType         CustomerType       @default(Direct)
   contractType         ContractType
   contractStartDate    DateTime
   contractLengthMonths Int

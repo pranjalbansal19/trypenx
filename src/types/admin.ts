@@ -9,6 +9,7 @@ export interface CustomerAddOn {
   category: AddOnCategory
 }
 export type CustomerStatus = 'Active' | 'Paused' | 'Cancelled'
+export type CustomerType = 'Direct' | 'ITMS'
 export type ScopeType = 'ip_range' | 'domain' | 'subdomain'
 export type TestType = 'soft_scan' | 'full_pen_test'
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'custom'
@@ -18,6 +19,7 @@ export type ReportStatus = 'New' | 'Reviewed' | 'Sent'
 export interface Customer {
   id: string
   companyName: string
+  customerType: CustomerType
   contractType: ContractType
   contractStartDate: string // ISO date
   contractLengthMonths: number
