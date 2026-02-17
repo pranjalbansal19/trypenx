@@ -51,6 +51,30 @@ function parseDateOnly(value) {
         return null;
     return new Date(`${value}T00:00:00.000Z`);
 }
+function normalizeAddOnsInput(value) {
+    if (value === undefined)
+        return undefined;
+    if (value === null)
+        return Prisma.DbNull;
+    if (!Array.isArray(value))
+        return undefined;
+    const sanitized = value
+        .map((entry) => {
+        if (!entry || typeof entry !== 'object')
+            return null;
+        const record = entry;
+        const code = typeof record.code === 'string' ? record.code.trim() : '';
+        const label = typeof record.label === 'string' ? record.label.trim() : '';
+        const category = record.category === 'recurring' || record.category === 'one_off'
+            ? record.category
+            : null;
+        if (!code || !label || !category)
+            return null;
+        return { code, label, category };
+    })
+        .filter(Boolean);
+    return sanitized;
+}
 function isNotFoundError(error) {
     return (error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025');
@@ -299,7 +323,7 @@ app.get('/api/customers/:id', async (req, res) => {
     });
 });
 app.post('/api/customers', async (req, res) => {
-    const { companyName, contractType, contractStartDate, contractLengthMonths, status, } = req.body;
+    const { companyName, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
     if (!companyName ||
         !contractType ||
         !contractStartDate ||
@@ -308,6 +332,7 @@ app.post('/api/customers', async (req, res) => {
         res.status(400).json({ error: 'Missing required customer fields' });
         return;
     }
+    const normalizedAddOns = normalizeAddOnsInput(addOns);
     const created = await prisma.customer.create({
         data: {
             companyName: String(companyName),
@@ -315,6 +340,7 @@ app.post('/api/customers', async (req, res) => {
             contractStartDate: parseDateOnly(String(contractStartDate)),
             contractLengthMonths: Number(contractLengthMonths),
             status: status,
+            ...(normalizedAddOns !== undefined ? { addOns: normalizedAddOns } : {}),
         },
     });
     res.status(201).json({
@@ -325,7 +351,7 @@ app.post('/api/customers', async (req, res) => {
     });
 });
 app.put('/api/customers/:id', async (req, res) => {
-    const { companyName, contractType, contractStartDate, contractLengthMonths, status, } = req.body;
+    const { companyName, contractType, contractStartDate, contractLengthMonths, status, addOns, } = req.body;
     const data = {};
     if (companyName !== undefined)
         data.companyName = String(companyName);
@@ -341,6 +367,10 @@ app.put('/api/customers/:id', async (req, res) => {
         data.contractLengthMonths = Number(contractLengthMonths);
     if (status !== undefined)
         data.status = status;
+    const normalizedAddOns = normalizeAddOnsInput(addOns);
+    if (normalizedAddOns !== undefined) {
+        data.addOns = normalizedAddOns;
+    }
     try {
         const updated = await prisma.customer.update({
             where: { id: req.params.id },

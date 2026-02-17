@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   paragraph: {
     fontFamily: 'Helvetica',
     fontWeight: 400,
-    lineHeight: 1.8,
+    lineHeight: 1.5,
     marginBottom: 14,
     color: '#1f2937',
     fontSize: 11,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   bulletPoint: {
     fontFamily: 'Helvetica',
     fontWeight: 400,
-    lineHeight: 1.8,
+    lineHeight: 1.5,
     marginBottom: 10,
     color: '#1f2937',
     fontSize: 11,
@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: '#111827',
-    marginTop: 20,
+    marginTop: 24,
     marginBottom: 12,
     letterSpacing: -0.1,
     lineHeight: 1.35,
@@ -1582,10 +1582,11 @@ export function ReportPdf({
         </View>
       </Page>
 
-      {/* AI-GENERATED CONTENT PAGES - All sections flow together and share pages naturally */}
+      {/* AI-GENERATED CONTENT PAGES - Each vulnerability starts on a new page */}
       <Page size="A4" style={styles.contentPage} wrap>
         <View wrap>
-          {contentSections.map((s, sectionIndex) => {
+          {(() => {
+            return contentSections.map((s, sectionIndex) => {
             const contentLines = String(s.content).split('\n')
 
             // Process content to identify tables, code blocks, and risk calculation boxes
@@ -1772,6 +1773,10 @@ export function ReportPdf({
             const isWhatThisScanSection =
               titleLower.startsWith('1.1') ||
               (titleLower.includes('what this scan is') && titleLower.includes('1.1'))
+            const isGlossarySection =
+              (titleLower.includes('7.3') && titleLower.includes('glossary')) ||
+              /7\.3\s+glossary/i.test(s.title)
+            const isVulnerabilitySection = /^4\.\d+\s/.test(s.title.trim())
 
             // Find the first regular text paragraph (not heading, bullet, table, code, etc.)
             const findFirstParagraph = () => {
@@ -1804,10 +1809,10 @@ export function ReportPdf({
 
             const firstParagraphIndex = findFirstParagraph()
 
-            return (
-              <View key={s.key} wrap={false}>
-                {/* Section title + first paragraph wrapped together */}
-                {firstParagraphIndex >= 0 ? (
+            const sectionContent = (
+              <View key={s.key} wrap>
+                {/* Section title + first paragraph kept together (skip for What This Scan Is - title is inside that block) */}
+                {firstParagraphIndex >= 0 && !isWhatThisScanSection ? (
                   <View wrap={false}>
                     <Text style={styles.sectionTitle} wrap={false}>
                       {s.title}
@@ -1893,15 +1898,18 @@ export function ReportPdf({
                       )
                     })()}
                   </View>
-                ) : (
+                ) : !isWhatThisScanSection ? (
                   <Text style={styles.sectionTitle} wrap={false}>
                     {s.title}
                   </Text>
-                )}
-                <View wrap={false}>
-                  {/* Special rendering for What This Scan Is section */}
+                ) : null}
+                <View wrap>
+                  {/* Special rendering for What This Scan Is section - entire section on one page */}
                   {isWhatThisScanSection && (
                     <View wrap={false}>
+                      <Text style={styles.sectionTitle} wrap={false}>
+                        {s.title}
+                      </Text>
                       {(() => {
                         const whatThisScanIs: string[] = []
                         const whatThisScanIsNot: string[] = []
@@ -2044,23 +2052,23 @@ export function ReportPdf({
                                 ))
                               ) : (
                                 <>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-is-1" style={styles.priorityMatrixText} wrap>
                                     • A consent-based, external vulnerability
                                     scan
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-is-2" style={styles.priorityMatrixText} wrap>
                                     • Focused on publicly exposed services and
                                     configurations
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-is-3" style={styles.priorityMatrixText} wrap>
                                     • Intended to highlight potential areas for
                                     review
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-is-4" style={styles.priorityMatrixText} wrap>
                                     • Suitable for regular monitoring and early
                                     risk awareness
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-is-5" style={styles.priorityMatrixText} wrap>
                                     • Non-intrusive and designed to identify
                                     potential security hygiene issues
                                   </Text>
@@ -2094,23 +2102,23 @@ export function ReportPdf({
                                 })
                               ) : (
                                 <>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-1" style={styles.priorityMatrixText} wrap>
                                     • Not a penetration test
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-2" style={styles.priorityMatrixText} wrap>
                                     • Not an exploitative assessment
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-3" style={styles.priorityMatrixText} wrap>
                                     • Not an internal network review
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-4" style={styles.priorityMatrixText} wrap>
                                     • Not confirmation of compromise or breach
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-5" style={styles.priorityMatrixText} wrap>
                                     • Not an assessment of application logic
                                     flaws
                                   </Text>
-                                  <Text style={styles.priorityMatrixText} wrap>
+                                  <Text key="scan-not-6" style={styles.priorityMatrixText} wrap>
                                     • Not an authentication bypass test
                                   </Text>
                                 </>
@@ -2656,12 +2664,17 @@ export function ReportPdf({
                           })
                         }
 
+                        const tableChunkStyle = (chunkIndex: number) =>
+                          chunkIndex === 0 && isGlossarySection
+                            ? [styles.table, { marginTop: 24 }]
+                            : styles.table
+
                         return (
                           <>
                             {chunks.map((chunkRows, chunkIndex) => (
                               <View
                                 key={`${item.key}-chunk-${chunkIndex}`}
-                                style={styles.table}
+                                style={tableChunkStyle(chunkIndex)}
                                 wrap={false}
                               >
                                 {renderTableChunk(chunkRows, chunkIndex)}
@@ -2903,11 +2916,11 @@ export function ReportPdf({
                               flexDirection: 'row',
                               alignItems: 'center',
                             }}
-                            wrap
+                            wrap={false}
                           >
                             <View
                               style={pillStyle || styles.sevMedium}
-                              wrap
+                              wrap={false}
                             >
                               <Text
                                 style={{
@@ -2917,7 +2930,7 @@ export function ReportPdf({
                                   color: (pillStyle || styles.sevMedium).color,
                                   lineHeight: 1.2,
                                 }}
-                                wrap
+                                wrap={false}
                               >
                                 {label}: {valueDisplay}
                               </Text>
@@ -2945,7 +2958,7 @@ export function ReportPdf({
                             key={item.key}
                             style={{
                               marginBottom: 12,
-                              marginTop: processed.level <= 3 ? 22 : 14,
+                              marginTop: processed.level <= 3 ? 24 : 14,
                             }}
                             wrap
                           >
@@ -3096,11 +3109,30 @@ export function ReportPdf({
                     })}
                 </View>
                 {sectionIndex < contentSections.length - 1 && (
-                  <View style={{ marginBottom: 20 }} />
+                  <View key={`spacer-${s.key}`} style={{ marginBottom: 20 }} />
                 )}
               </View>
             )
-          })}
+
+            if (isGlossarySection) {
+              return (
+                <React.Fragment key={`${s.key}-glossary`}>
+                  <View break />
+                  {sectionContent}
+                </React.Fragment>
+              )
+            }
+            if (isVulnerabilitySection) {
+              return (
+                <React.Fragment key={`${s.key}-vuln`}>
+                  <View break />
+                  {sectionContent}
+                </React.Fragment>
+              )
+            }
+            return sectionContent
+          })
+          })()}
         </View>
         <View style={styles.contentFooter} fixed>
           <View style={styles.contentFooterDivider} />
